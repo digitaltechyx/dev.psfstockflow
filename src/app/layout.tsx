@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/hooks/use-auth";
 import { Toaster } from "@/components/ui/toaster";
 import { WhatsAppFloatingButton } from "@/components/whatsapp-floating-button";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title: "PSF StockFlow",
@@ -43,6 +44,7 @@ export default function RootLayout({
           <Toaster />
           <WhatsAppFloatingButton />
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
