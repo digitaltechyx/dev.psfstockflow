@@ -1,0 +1,54 @@
+import { NextResponse } from "next/server";
+import { adminAuth } from "@/lib/firebase-admin";
+
+export const dynamic = "force-dynamic";
+
+const EBAY_SCOPES = [
+  "https://api.ebay.com/oauth/api_scope",
+  "https://api.ebay.com/oauth/api_scope/sell.inventory.readonly",
+  "https://api.ebay.com/oauth/api_scope/sell.fulfillment.readonly",
+  "https://api.ebay.com/oauth/api_scope/sell.account.readonly",
+].join(" ");
+
+export async function GET(request: Request) {
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const token = authHeader.slice(7).trim();
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    await adminAuth().verifyIdToken(token);
+  } catch {
+    return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
+  }
+
+  const clientId = process.env.NEXT_PUBLIC_EBAY_APP_ID;
+  const ruName = process.env.EBAY_RUNAME;
+  if (!clientId || !ruName) {
+    return NextResponse.json(
+      { error: "eBay app not configured (missing App ID or RuName)" },
+      { status: 500 }
+    );
+  }
+
+  const isSandbox =
+    process.env.EBAY_SANDBOX !== "false" &&
+    (clientId.includes("SBX") || process.env.EBAY_SANDBOX === "true");
+  const authHost = isSandbox
+    ? "https://auth.sandbox.ebay.com/oauth2/authorize"
+    : "https://auth.ebay.com/oauth2/authorize";
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    redirect_uri: ruName,
+    scope: EBAY_SCOPES,
+    state: "ebay",
+  });
+  const url = authHost + "?" + params.toString();
+  return NextResponse.json({ url });
+}

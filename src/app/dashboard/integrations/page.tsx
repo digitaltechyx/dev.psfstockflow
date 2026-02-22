@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plug, Loader2, Plus, Trash2, Package } from "lucide-react";
+import { Plug, Loader2, Plus, Trash2, Package, ShoppingBag } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 
@@ -30,30 +30,46 @@ type ShopifyConnectionSummary = {
   selectedVariants?: ShopifySelectedVariant[];
 };
 
+type EbayConnectionSummary = {
+  id: string;
+  connectedAt: { seconds: number; nanoseconds: number } | string;
+  environment: string;
+};
+
 export default function IntegrationsPage() {
   const { user, userProfile } = useAuth();
   const { toast } = useToast();
   const [shopifyConnections, setShopifyConnections] = useState<ShopifyConnectionSummary[]>([]);
+  const [ebayConnections, setEbayConnections] = useState<EbayConnectionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
   const [shopInput, setShopInput] = useState("");
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
   const [pendingDisconnect, setPendingDisconnect] = useState<{ id: string; shopName: string } | null>(null);
+  const [ebayDisconnectId, setEbayDisconnectId] = useState<string | null>(null);
+  const [ebayConnectLoading, setEbayConnectLoading] = useState(false);
 
   const fetchConnections = async () => {
     if (!user) return;
     setLoading(true);
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/integrations/shopify-connections", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to load connections");
-      const data = await res.json();
-      setShopifyConnections(data.connections ?? []);
+      const [shopifyRes, ebayRes] = await Promise.all([
+        fetch("/api/integrations/shopify-connections", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/integrations/ebay-connections", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (shopifyRes.ok) {
+        const data = await shopifyRes.json();
+        setShopifyConnections(data.connections ?? []);
+      }
+      if (ebayRes.ok) {
+        const data = await ebayRes.json();
+        setEbayConnections(data.connections ?? []);
+      }
     } catch {
       setShopifyConnections([]);
+      setEbayConnections([]);
     } finally {
       setLoading(false);
     }
@@ -119,6 +135,49 @@ export default function IntegrationsPage() {
   const openDisconnectDialog = (conn: ShopifyConnectionSummary) => {
     setPendingDisconnect({ id: conn.id, shopName: conn.shopName || conn.shop?.replace(".myshopify.com", "") || "this store" });
     setDisconnectDialogOpen(true);
+  };
+
+  const handleConnectEbay = async () => {
+    if (!user) return;
+    setEbayConnectLoading(true);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch("/api/integrations/ebay/authorize-url", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({ variant: "destructive", title: "eBay", description: data.error || "Could not start connection." });
+        return;
+      }
+      if (data.url) window.location.href = data.url;
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: e instanceof Error ? e.message : "Failed to connect eBay." });
+    } finally {
+      setEbayConnectLoading(false);
+    }
+  };
+
+  const handleDisconnectEbay = async (id: string) => {
+    if (!user) return;
+    setEbayDisconnectId(id);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/integrations/ebay-connections?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to disconnect");
+      }
+      toast({ title: "Disconnected", description: "eBay account has been disconnected." });
+      fetchConnections();
+    } catch (err: unknown) {
+      toast({ variant: "destructive", title: "Error", description: err instanceof Error ? err.message : "Could not disconnect." });
+    } finally {
+      setEbayDisconnectId(null);
+    }
   };
 
   const formatConnectedAt = (raw: ShopifyConnectionSummary["connectedAt"]) => {
@@ -266,6 +325,59 @@ export default function IntegrationsPage() {
                   </li>
                 ))}
               </ul>
+            )}
+          </section>
+
+          {/* eBay */}
+          <section className="pt-6 border-t">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <ShoppingBag className="h-5 w-5" />
+                  eBay
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Connect your eBay seller account. Orders for selected listings will sync to PSF StockFlow (event-based).
+                </p>
+              </div>
+              {ebayConnections.length === 0 && (
+                <Button onClick={handleConnectEbay} disabled={ebayConnectLoading} className="shrink-0">
+                  {ebayConnectLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+                  Connect eBay
+                </Button>
+              )}
+            </div>
+            {!loading && ebayConnections.length > 0 ? (
+              <ul className="space-y-3">
+                {ebayConnections.map((conn) => (
+                  <li
+                    key={conn.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium">eBay account</p>
+                      <p className="text-xs text-muted-foreground mt-1 capitalize">{conn.environment}</p>
+                      <p className="text-xs text-muted-foreground">Connected {formatConnectedAt(conn.connectedAt)}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:text-destructive shrink-0"
+                      onClick={() => handleDisconnectEbay(conn.id)}
+                      disabled={ebayDisconnectId === conn.id}
+                    >
+                      {ebayDisconnectId === conn.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                      Disconnect
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {!loading && ebayConnections.length === 0 && (
+              <div className="rounded-lg border border-dashed bg-muted/30 p-6 text-center">
+                <p className="text-sm text-muted-foreground">No eBay account connected.</p>
+                <p className="text-xs text-muted-foreground mt-1">Click &quot;Connect eBay&quot; to link your seller account (Sandbox or Production).</p>
+              </div>
             )}
           </section>
 
