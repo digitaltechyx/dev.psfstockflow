@@ -24,6 +24,8 @@ export default function EbayListingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [ebayEnvironment, setEbayEnvironment] = useState<"sandbox" | "production" | null>(null);
+  const [inventoryItemCount, setInventoryItemCount] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
@@ -41,6 +43,8 @@ export default function EbayListingsPage() {
         const msg = (data.error as string) || "Failed to load listings";
         setLoadError(msg);
         setListings([]);
+        setEbayEnvironment(null);
+        setInventoryItemCount(null);
         toast({
           variant: "destructive",
           title: "Error",
@@ -49,10 +53,14 @@ export default function EbayListingsPage() {
         return;
       }
       setListings(data.listings ?? []);
+      setEbayEnvironment((data.environment as "sandbox" | "production") ?? null);
+      setInventoryItemCount(typeof data.inventoryItemCount === "number" ? data.inventoryItemCount : null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load eBay listings.";
       setLoadError(msg);
       setListings([]);
+      setEbayEnvironment(null);
+      setInventoryItemCount(null);
       toast({
         variant: "destructive",
         title: "Error",
@@ -155,6 +163,19 @@ export default function EbayListingsPage() {
           <p className="text-muted-foreground text-sm mt-1">
             Select the listings you fulfill through PSF. Only orders containing at least one of these will sync to PSF.
           </p>
+          {ebayEnvironment && (
+            <p className="text-sm mt-2 font-medium">
+              Connected to eBay{" "}
+              <span className={ebayEnvironment === "sandbox" ? "text-amber-600" : "text-green-600"}>
+                {ebayEnvironment === "sandbox" ? "Sandbox" : "Production"}
+              </span>
+              {inventoryItemCount !== null && (
+                <span className="text-muted-foreground font-normal ml-2">
+                  ({inventoryItemCount} inventory item{inventoryItemCount !== 1 ? "s" : ""} from eBay)
+                </span>
+              )}
+            </p>
+          )}
         </div>
       </div>
 
@@ -182,9 +203,26 @@ export default function EbayListingsPage() {
               </Button>
             </div>
           ) : listings.length === 0 ? (
-            <p className="text-muted-foreground py-6">
-              No listings found, or your eBay account has no inventory items/offers. Connect eBay in Integrations and ensure you have listings.
-            </p>
+            <div className="py-6 space-y-3">
+              <p className="text-muted-foreground">
+                {inventoryItemCount === 0
+                  ? "eBay returned 0 inventory items for this connection."
+                  : inventoryItemCount != null && inventoryItemCount > 0
+                    ? `${inventoryItemCount} inventory item(s) found but no published offers. Publish offers in Seller Hub to see them here.`
+                    : "No listings found, or your eBay account has no inventory items/offers."}
+              </p>
+              {ebayEnvironment && (
+                <p className="text-sm text-muted-foreground border-l-4 border-amber-500 pl-3 py-1">
+                  You're connected to <strong>{ebayEnvironment === "sandbox" ? "Sandbox" : "Production"}</strong>. Your
+                  listings must be in this same environment. If they're on live eBay, connect with Production (EBAY_SANDBOX=false
+                  and Production app keys). If they're test listings, use Sandbox (EBAY_SANDBOX=true and SBX keys). Disconnect
+                  in Integrations and reconnect with the correct environment.
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                Connect eBay in Integrations and ensure you have inventory items and published offers.
+              </p>
+            </div>
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">

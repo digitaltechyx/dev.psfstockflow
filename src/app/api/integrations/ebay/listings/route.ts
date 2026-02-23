@@ -124,7 +124,11 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ listings });
+    return NextResponse.json({
+      listings,
+      environment: conn.isSandbox ? "sandbox" : "production",
+      inventoryItemCount: skus.length,
+    });
   } catch (err: unknown) {
     console.error("[ebay listings]", err);
     return NextResponse.json(
