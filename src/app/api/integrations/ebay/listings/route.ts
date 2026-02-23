@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
     const skus: string[] = [];
     let offset = 0;
     let hasMore = true;
+    let ebayReportedTotal: number | undefined;
     while (hasMore) {
       const invRes = await fetch(
         `${base}/sell/inventory/v1/inventory_item?limit=${LISTINGS_PAGE_SIZE}&offset=${offset}`,
@@ -82,6 +83,7 @@ export async function GET(request: NextRequest) {
         inventoryItems?: (InventoryItemRef | string)[];
         total?: number;
       };
+      if (offset === 0 && typeof invData.total === "number") ebayReportedTotal = invData.total;
       const items = invData.inventoryItems ?? [];
       items.forEach((i) => {
         const sku = typeof i === "string" ? i : (i as InventoryItemRef).sku;
@@ -130,6 +132,7 @@ export async function GET(request: NextRequest) {
       listings,
       environment: conn.isSandbox ? "sandbox" : "production",
       inventoryItemCount: skus.length,
+      ebayReportedTotal: ebayReportedTotal,
     });
   } catch (err: unknown) {
     console.error("[ebay listings]", err);

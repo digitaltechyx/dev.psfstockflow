@@ -29,6 +29,7 @@ export default function EbayListingsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [ebayEnvironment, setEbayEnvironment] = useState<"sandbox" | "production" | null>(null);
   const [inventoryItemCount, setInventoryItemCount] = useState<number | null>(null);
+  const [ebayReportedTotal, setEbayReportedTotal] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
@@ -51,6 +52,7 @@ export default function EbayListingsPage() {
         setListings([]);
         setEbayEnvironment(null);
         setInventoryItemCount(null);
+        setEbayReportedTotal(null);
         toast({
           variant: "destructive",
           title: "Error",
@@ -61,12 +63,14 @@ export default function EbayListingsPage() {
       setListings(data.listings ?? []);
       setEbayEnvironment((data.environment as "sandbox" | "production") ?? null);
       setInventoryItemCount(typeof data.inventoryItemCount === "number" ? data.inventoryItemCount : null);
+      setEbayReportedTotal(typeof data.ebayReportedTotal === "number" ? data.ebayReportedTotal : null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load eBay listings.";
       setLoadError(msg);
       setListings([]);
       setEbayEnvironment(null);
       setInventoryItemCount(null);
+      setEbayReportedTotal(null);
       toast({
         variant: "destructive",
         title: "Error",
@@ -215,10 +219,19 @@ export default function EbayListingsPage() {
             <div className="py-6 space-y-3">
               <p className="text-muted-foreground">
                 {inventoryItemCount === 0
-                  ? "eBay returned 0 inventory items for this connection."
+                  ? ebayReportedTotal != null && ebayReportedTotal > 0
+                    ? `eBay Inventory API reports ${ebayReportedTotal} item(s) but none could be loaded for this connection.`
+                    : "eBay returned 0 inventory items for this connection."
                   : inventoryItemCount != null && inventoryItemCount > 0
                     ? `${inventoryItemCount} inventory item(s) found but no published offers. Publish offers in Seller Hub to see them here.`
                     : "No listings found, or your eBay account has no inventory items/offers."}
+              </p>
+              <p className="text-sm text-muted-foreground border-l-4 border-slate-300 dark:border-slate-600 pl-3 py-1">
+                <strong>Why don’t I see my Seller Hub “Active” listings?</strong> Seller Hub’s “Manage active listings” can
+                include items created with <strong>Create listing</strong> or legacy tools. PSF only shows items that exist in
+                eBay’s <strong>Inventory API</strong>. If you have many active listings in Seller Hub but 0 here, those
+                listings were likely created outside the Inventory API. To have them in PSF, create or migrate listings using
+                an eBay app or flow that uses the Inventory API (same eBay account and environment).
               </p>
               {ebayEnvironment && (
                 <p className="text-sm text-muted-foreground border-l-4 border-amber-500 pl-3 py-1">
@@ -229,7 +242,7 @@ export default function EbayListingsPage() {
                 </p>
               )}
               <p className="text-sm text-muted-foreground">
-                Connect eBay in Integrations and ensure you have inventory items and published offers.
+                Connect eBay in Integrations and ensure you have inventory items and published offers in the Inventory API.
               </p>
             </div>
           ) : (
