@@ -29,6 +29,7 @@ import {
   FolderOpen,
   Receipt,
   ShoppingBag,
+  ShoppingCart,
   RotateCcw,
   Package,
 } from "lucide-react";
@@ -301,6 +302,13 @@ export function AdminSidebar() {
       url: "/admin/dashboard/shopify-orders",
       icon: ShoppingBag,
       color: "text-green-600",
+      requiredFeature: "admin_dashboard" as const,
+    },
+    {
+      title: "eBay Orders",
+      url: "/admin/dashboard/ebay-orders",
+      icon: ShoppingCart,
+      color: "text-amber-600",
       requiredFeature: "admin_dashboard" as const,
     },
   ];

@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plug, Loader2, Plus, Trash2, Package, ShoppingBag } from "lucide-react";
+import { Plug, Loader2, Plus, Trash2, Package, ShoppingBag, ShoppingCart } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 
@@ -34,6 +34,7 @@ type EbayConnectionSummary = {
   id: string;
   connectedAt: { seconds: number; nanoseconds: number } | string;
   environment: string;
+  selectedOfferIds?: string[];
 };
 
 export default function IntegrationsPage() {
@@ -359,16 +360,32 @@ export default function IntegrationsPage() {
                       <p className="text-xs text-muted-foreground mt-1 capitalize">{conn.environment}</p>
                       <p className="text-xs text-muted-foreground">Connected {formatConnectedAt(conn.connectedAt)}</p>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-destructive hover:text-destructive shrink-0"
-                      onClick={() => handleDisconnectEbay(conn.id)}
-                      disabled={ebayDisconnectId === conn.id}
-                    >
-                      {ebayDisconnectId === conn.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
-                      Disconnect
-                    </Button>
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href="/dashboard/integrations/ebay/listings">
+                          <Package className="h-4 w-4 mr-1" />
+                          {Array.isArray(conn.selectedOfferIds) && conn.selectedOfferIds.length > 0
+                            ? `Listings (${conn.selectedOfferIds.length})`
+                            : "Manage listings"}
+                        </Link>
+                      </Button>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href="/dashboard/integrations/ebay/orders">
+                          <ShoppingCart className="h-4 w-4 mr-1" />
+                          Orders
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleDisconnectEbay(conn.id)}
+                        disabled={ebayDisconnectId === conn.id}
+                      >
+                        {ebayDisconnectId === conn.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                        Disconnect
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>

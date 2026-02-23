@@ -35,6 +35,8 @@ export async function GET(request: NextRequest) {
         id: d.id,
         connectedAt: data.connectedAt,
         environment: data.environment ?? "sandbox",
+        selectedOfferIds: Array.isArray(data.selectedOfferIds) ? data.selectedOfferIds : [],
+        selectedListingIds: Array.isArray(data.selectedListingIds) ? data.selectedListingIds : [],
       };
     });
     return NextResponse.json({ connections: list });
