@@ -53,6 +53,10 @@ export async function GET(request: Request) {
     scope: EBAY_SCOPES,
     state,
   });
+  // Force eBay to show login/consent so user can sign in with a different account
+  if (addNew) {
+    params.set("prompt", "login");
+  }
   const url = authHost + "?" + params.toString();
   return NextResponse.json({ url });
 }

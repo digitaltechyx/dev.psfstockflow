@@ -21,7 +21,7 @@ import { format } from "date-fns";
 import type { UserProfile } from "@/types";
 import { EditUserForm } from "./edit-user-form";
 import { RoleFeatureManagement } from "./role-feature-management";
-import { getDefaultFeaturesForRole } from "@/lib/permissions";
+import { getDefaultFeaturesForRole, getUserRoles } from "@/lib/permissions";
 
 interface MemberManagementProps {
   adminUser: UserProfile | null;
