@@ -35,6 +35,10 @@ export async function GET(request: Request) {
     );
   }
 
+  const { searchParams } = new URL(request.url);
+  const addNew = searchParams.get("addNew") === "true";
+  const state = addNew ? "ebay_add" : "ebay";
+
   const isSandbox =
     process.env.EBAY_SANDBOX !== "false" &&
     (clientId.includes("SBX") || process.env.EBAY_SANDBOX === "true");
@@ -47,7 +51,7 @@ export async function GET(request: Request) {
     response_type: "code",
     redirect_uri: ruName,
     scope: EBAY_SCOPES,
-    state: "ebay",
+    state,
   });
   const url = authHost + "?" + params.toString();
   return NextResponse.json({ url });

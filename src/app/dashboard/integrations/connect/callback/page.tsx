@@ -19,7 +19,7 @@ export default function ConnectCallbackPage() {
     const code = searchParams.get("code");
     const state = searchParams.get("state");
 
-    if (state === "ebay") {
+    if (state === "ebay" || state === "ebay_add") {
       if (!code) {
         setStatus("error");
         setMessage("No authorization code from eBay. You may have declined access or the link expired.");
@@ -39,7 +39,7 @@ export default function ConnectCallbackPage() {
           const res = await fetch("/api/integrations/ebay/exchange-token", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ code }),
+            body: JSON.stringify({ code, addNew: state === "ebay_add" }),
           });
           const data = await res.json().catch(() => ({}));
           if (cancelled) return;

@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const code = typeof body.code === "string" ? body.code.trim() : undefined;
+  const addNew = body.addNew === true;
   if (!code) {
     return NextResponse.json({ error: "Missing code" }, { status: 400 });
   }
@@ -113,7 +114,9 @@ export async function POST(request: NextRequest) {
       environment: isSandbox ? "sandbox" : "production",
     };
 
-    if (!snapshot.empty) {
+    if (addNew) {
+      await col.add(docData);
+    } else if (!snapshot.empty) {
       await snapshot.docs[0].ref.update(docData);
     } else {
       await col.add(docData);

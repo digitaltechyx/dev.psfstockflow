@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +41,8 @@ type EbayOrder = {
 };
 
 export default function EbayOrdersPage() {
+  const searchParams = useSearchParams();
+  const connectionId = searchParams.get("connectionId")?.trim() || undefined;
   const { user } = useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<EbayOrder[]>([]);
@@ -55,7 +58,10 @@ export default function EbayOrdersPage() {
     setLoading(true);
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/integrations/ebay/orders", {
+      const url = connectionId
+        ? `/api/integrations/ebay/orders?connectionId=${encodeURIComponent(connectionId)}`
+        : "/api/integrations/ebay/orders";
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -74,7 +80,7 @@ export default function EbayOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [user, toast, connectionId]);
 
   useEffect(() => {
     if (user) fetchOrders();
@@ -85,7 +91,10 @@ export default function EbayOrdersPage() {
     setSyncing(true);
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/integrations/ebay/orders", {
+      const url = connectionId
+        ? `/api/integrations/ebay/orders?connectionId=${encodeURIComponent(connectionId)}`
+        : "/api/integrations/ebay/orders";
+      const res = await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -129,6 +138,7 @@ export default function EbayOrdersPage() {
         lineItems: Array<{ lineItemId: string; quantity: number }>;
         shippingCarrierCode?: string;
         trackingNumber?: string;
+        connectionId?: string;
       } = {
         orderId,
         lineItems: lineItems.map((li) => ({
@@ -136,6 +146,7 @@ export default function EbayOrdersPage() {
           quantity: li.quantity ?? 1,
         })),
       };
+      if (connectionId) body.connectionId = connectionId;
       const tn = trackingNumber.trim().replace(/\s/g, "");
       const cc = carrierCode.trim();
       if (tn && cc) {

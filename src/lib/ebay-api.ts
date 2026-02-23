@@ -15,17 +15,24 @@ export type EbayConnection = {
 
 /**
  * Get a valid eBay access token for the user. Refreshes if expired.
+ * @param uid - User ID
+ * @param connectionId - Optional. If provided, use this connection; otherwise use the first.
  * Returns null if no connection or refresh failed.
  */
-export async function getValidEbayToken(uid: string): Promise<EbayConnection | null> {
+export async function getValidEbayToken(uid: string, connectionId?: string): Promise<EbayConnection | null> {
   const db = adminDb();
   const col = db.collection("users").doc(uid).collection("ebayConnections");
-  const snapshot = await col.limit(1).get();
-  if (snapshot.empty) return null;
-
-  const doc = snapshot.docs[0];
+  let doc: { data(): Record<string, unknown> | undefined; ref: { update(x: Record<string, unknown>): Promise<void> }; id: string } | null = null;
+  if (connectionId) {
+    const snap = await col.doc(connectionId).get();
+    if (snap.exists) doc = snap as typeof doc;
+  } else {
+    const snapshot = await col.limit(1).get();
+    if (!snapshot.empty) doc = snapshot.docs[0];
+  }
+  if (!doc) return null;
   const data = doc.data();
-  const connectionId = doc.id;
+  const connId = doc.id;
   const accessToken = data.accessToken as string | undefined;
   const refreshToken = data.refreshToken as string | null | undefined;
   const expiresAt = data.expiresAt as { seconds: number } | undefined;
@@ -37,11 +44,11 @@ export async function getValidEbayToken(uid: string): Promise<EbayConnection | n
   const nowSec = Math.floor(Date.now() / 1000);
   const expSec = expiresAt?.seconds ?? 0;
   if (expSec > nowSec + EBAY_TOKEN_REFRESH_BUFFER_SEC) {
-    return { connectionId, accessToken, isSandbox };
+    return { connectionId: connId, accessToken, isSandbox };
   }
 
   if (!refreshToken) {
-    return { connectionId, accessToken, isSandbox };
+    return { connectionId: connId, accessToken, isSandbox };
   }
 
   const clientId = process.env.NEXT_PUBLIC_EBAY_APP_ID;
@@ -77,7 +84,7 @@ export async function getValidEbayToken(uid: string): Promise<EbayConnection | n
 
     if (!res.ok || !body.access_token) {
       console.error("[ebay refresh token]", res.status, body);
-      return { connectionId, accessToken, isSandbox };
+      return { connectionId: connId, accessToken, isSandbox };
     }
 
     const now = new Date();
@@ -96,13 +103,13 @@ export async function getValidEbayToken(uid: string): Promise<EbayConnection | n
     });
 
     return {
-      connectionId,
+      connectionId: connId,
       accessToken: body.access_token,
       isSandbox,
     };
   } catch (err) {
     console.error("[ebay refresh token]", err);
-    return { connectionId, accessToken, isSandbox };
+    return { connectionId: connId, accessToken, isSandbox };
   }
 }
 

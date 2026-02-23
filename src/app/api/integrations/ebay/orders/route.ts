@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const uid = searchParams.get("userId")?.trim() || callerUid;
+  const connectionId = searchParams.get("connectionId")?.trim() || undefined;
   if (uid !== callerUid && !isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -77,10 +78,10 @@ export async function GET(request: NextRequest) {
       .limit(200)
       .get();
 
-    const orders = snapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    }));
+    let orders = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (connectionId) {
+      orders = orders.filter((o) => (o as { connectionId?: string }).connectionId === connectionId);
+    }
     return NextResponse.json({ orders });
   } catch (err: unknown) {
     console.error("[ebay orders GET]", err);
@@ -116,11 +117,12 @@ export async function POST(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const uid = searchParams.get("userId")?.trim() || callerUid;
+  const connectionId = searchParams.get("connectionId")?.trim() || undefined;
   if (uid !== callerUid && !isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const conn = await getValidEbayToken(uid);
+  const conn = await getValidEbayToken(uid, connectionId);
   if (!conn) {
     return NextResponse.json(
       { error: "No eBay connection. Connect your eBay account in Integrations first." },
@@ -129,16 +131,12 @@ export async function POST(request: NextRequest) {
   }
 
   const db = adminDb();
-  const connectionSnap = await db
-    .collection("users")
-    .doc(uid)
-    .collection("ebayConnections")
-    .limit(1)
-    .get();
-  if (connectionSnap.empty) {
+  const connectionRef = db.collection("users").doc(uid).collection("ebayConnections").doc(conn.connectionId);
+  const connectionSnap = await connectionRef.get();
+  if (!connectionSnap.exists) {
     return NextResponse.json({ error: "No eBay connection" }, { status: 400 });
   }
-  const connectionData = connectionSnap.docs[0].data();
+  const connectionData = connectionSnap.data() ?? {};
   const selectedListingIds = Array.isArray(connectionData.selectedListingIds)
     ? connectionData.selectedListingIds as string[]
     : [];
@@ -190,6 +188,7 @@ export async function POST(request: NextRequest) {
 
         const batch: Record<string, unknown> = {
           orderId,
+          connectionId: conn.connectionId,
           creationDate: order.creationDate ?? null,
           lastModifiedDate: order.lastModifiedDate ?? null,
           orderFulfillmentStatus: order.orderFulfillmentStatus ?? null,

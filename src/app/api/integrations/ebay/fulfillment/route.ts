@@ -39,12 +39,13 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const bodyUserId = typeof body.userId === "string" ? body.userId.trim() : undefined;
+  const bodyConnectionId = typeof body.connectionId === "string" ? body.connectionId.trim() : undefined;
   const uid = bodyUserId && isAdmin ? bodyUserId : callerUid;
   if (uid !== callerUid && !isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const conn = await getValidEbayToken(uid);
+  const conn = await getValidEbayToken(uid, bodyConnectionId);
   if (!conn) {
     return NextResponse.json(
       { error: "No eBay connection. Connect your eBay account first." },

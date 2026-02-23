@@ -138,12 +138,13 @@ export default function IntegrationsPage() {
     setDisconnectDialogOpen(true);
   };
 
-  const handleConnectEbay = async () => {
+  const handleConnectEbay = async (addNew?: boolean) => {
     if (!user) return;
     setEbayConnectLoading(true);
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/integrations/ebay/authorize-url", {
+      const url = addNew ? "/api/integrations/ebay/authorize-url?addNew=true" : "/api/integrations/ebay/authorize-url";
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
@@ -341,12 +342,12 @@ export default function IntegrationsPage() {
                   Connect your eBay seller account. Orders for selected listings will sync to PSF StockFlow (event-based).
                 </p>
               </div>
-              {ebayConnections.length === 0 && (
-                <Button onClick={handleConnectEbay} disabled={ebayConnectLoading} className="shrink-0">
+              <div className="flex gap-2 shrink-0">
+                <Button onClick={() => handleConnectEbay(ebayConnections.length > 0)} disabled={ebayConnectLoading}>
                   {ebayConnectLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-                  Connect eBay
+                  {ebayConnections.length > 0 ? "Add another eBay account" : "Connect eBay"}
                 </Button>
-              )}
+              </div>
             </div>
             {!loading && ebayConnections.length > 0 ? (
               <ul className="space-y-3">
@@ -362,7 +363,7 @@ export default function IntegrationsPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0 flex-wrap">
                       <Button variant="outline" size="sm" asChild>
-                        <Link href="/dashboard/integrations/ebay/listings">
+                        <Link href={`/dashboard/integrations/ebay/listings?connectionId=${encodeURIComponent(conn.id)}`}>
                           <Package className="h-4 w-4 mr-1" />
                           {Array.isArray(conn.selectedOfferIds) && conn.selectedOfferIds.length > 0
                             ? `Listings (${conn.selectedOfferIds.length})`
@@ -370,7 +371,7 @@ export default function IntegrationsPage() {
                         </Link>
                       </Button>
                       <Button variant="outline" size="sm" asChild>
-                        <Link href="/dashboard/integrations/ebay/orders">
+                        <Link href={`/dashboard/integrations/ebay/orders?connectionId=${encodeURIComponent(conn.id)}`}>
                           <ShoppingCart className="h-4 w-4 mr-1" />
                           Orders
                         </Link>
