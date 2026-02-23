@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +19,8 @@ type EbayListingRow = {
 };
 
 export default function EbayListingsPage() {
+  const searchParams = useSearchParams();
+  const connectionId = searchParams.get("connectionId")?.trim() || undefined;
   const { user } = useAuth();
   const { toast } = useToast();
   const [listings, setListings] = useState<EbayListingRow[]>([]);
@@ -35,7 +38,10 @@ export default function EbayListingsPage() {
     setLoadError(null);
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/integrations/ebay/listings", {
+      const url = connectionId
+        ? `/api/integrations/ebay/listings?connectionId=${encodeURIComponent(connectionId)}`
+        : "/api/integrations/ebay/listings";
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
@@ -69,13 +75,16 @@ export default function EbayListingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [user, toast, connectionId]);
 
   const fetchSelection = useCallback(async () => {
     if (!user) return;
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/integrations/ebay/selected-listings", {
+      const url = connectionId
+        ? `/api/integrations/ebay/selected-listings?connectionId=${encodeURIComponent(connectionId)}`
+        : "/api/integrations/ebay/selected-listings";
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
@@ -85,7 +94,7 @@ export default function EbayListingsPage() {
     } catch {
       // ignore
     }
-  }, [user]);
+  }, [user, connectionId]);
 
   useEffect(() => {
     if (user) {
@@ -125,7 +134,7 @@ export default function EbayListingsPage() {
       const res = await fetch("/api/integrations/ebay/selected-listings", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ offerIds }),
+        body: JSON.stringify({ offerIds, connectionId: connectionId || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

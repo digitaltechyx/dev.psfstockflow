@@ -30,7 +30,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
   }
 
-  const conn = await getValidEbayToken(uid);
+  const { searchParams } = new URL(request.url);
+  const connectionId = searchParams.get("connectionId")?.trim() || undefined;
+  const conn = await getValidEbayToken(uid, connectionId);
   if (!conn) {
     return NextResponse.json(
       { error: "No eBay connection. Connect your eBay account in Integrations first." },
