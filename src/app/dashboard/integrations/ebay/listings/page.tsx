@@ -23,30 +23,41 @@ export default function EbayListingsPage() {
   const [listings, setListings] = useState<EbayListingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
   const fetchListings = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const token = await user.getIdToken();
       const res = await fetch("/api/integrations/ebay/listings", {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data.error as string) || "Failed to load listings");
+        const msg = (data.error as string) || "Failed to load listings";
+        setLoadError(msg);
+        setListings([]);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: msg,
+        });
+        return;
       }
-      const data = await res.json();
       setListings(data.listings ?? []);
     } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load eBay listings.";
+      setLoadError(msg);
+      setListings([]);
       toast({
         variant: "destructive",
         title: "Error",
-        description: e instanceof Error ? e.message : "Failed to load eBay listings.",
+        description: msg,
       });
-      setListings([]);
     } finally {
       setLoading(false);
     }
@@ -159,6 +170,16 @@ export default function EbayListingsPage() {
             <div className="flex items-center gap-2 text-muted-foreground py-8">
               <Loader2 className="h-5 w-5 animate-spin" />
               Loading listings from eBay…
+            </div>
+          ) : loadError ? (
+            <div className="py-6 space-y-3">
+              <p className="text-destructive font-medium">{loadError}</p>
+              <p className="text-sm text-muted-foreground">
+                Make sure your eBay app has Inventory and Fulfillment permissions, and that you connected using the same environment (Sandbox or Production) where your listings exist.
+              </p>
+              <Button variant="outline" onClick={() => fetchListings()}>
+                Try again
+              </Button>
             </div>
           ) : listings.length === 0 ? (
             <p className="text-muted-foreground py-6">

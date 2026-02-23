@@ -55,10 +55,23 @@ export async function GET(request: NextRequest) {
         { headers }
       );
       if (!invRes.ok) {
-        const err = await invRes.json().catch(() => ({}));
+        const err = (await invRes.json().catch(() => ({}))) as {
+          errors?: Array<{ message?: string; longMessage?: string; errorId?: number }>;
+        };
         console.error("[ebay listings getInventoryItems]", invRes.status, err);
+        const firstMsg =
+          Array.isArray(err?.errors) && err.errors.length > 0
+            ? err.errors[0].longMessage || err.errors[0].message
+            : null;
+        const errorText =
+          firstMsg ||
+          (invRes.status === 401 || invRes.status === 403
+            ? "eBay token invalid or missing permission (Inventory). Try reconnecting eBay in Integrations."
+            : invRes.status === 404
+              ? "eBay endpoint not found. Check Sandbox vs Production: reconnect with the correct environment."
+              : "eBay returned an error. Try again or reconnect eBay in Integrations.");
         return NextResponse.json(
-          { error: "Failed to load eBay inventory", detail: (err as { errors?: unknown }).errors },
+          { error: errorText, detail: err?.errors },
           { status: 502 }
         );
       }
