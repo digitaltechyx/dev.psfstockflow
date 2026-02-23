@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
           const res = await fetch(`${base}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`, {
             headers: {
               Authorization: `Bearer ${conn.accessToken}`,
+              "Accept-Language": "en-US",
               "Content-Language": "en-US",
             },
           });

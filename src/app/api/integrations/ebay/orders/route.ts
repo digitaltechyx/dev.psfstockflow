@@ -149,6 +149,7 @@ export async function POST(request: NextRequest) {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${conn.accessToken}`,
     "Content-Type": "application/json",
+    "Accept-Language": "en-US",
     "Content-Language": "en-US",
   };
 

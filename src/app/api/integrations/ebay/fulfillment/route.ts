@@ -111,6 +111,7 @@ export async function POST(request: NextRequest) {
       headers: {
         Authorization: `Bearer ${conn.accessToken}`,
         "Content-Type": "application/json",
+        "Accept-Language": "en-US",
         "Content-Language": "en-US",
       },
       body: JSON.stringify(payload),

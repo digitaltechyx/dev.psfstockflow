@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${conn.accessToken}`,
     "Content-Type": "application/json",
+    "Accept-Language": "en-US",
     "Content-Language": "en-US",
   };
 
