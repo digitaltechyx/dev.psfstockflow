@@ -7,10 +7,15 @@ import { InventoryTable } from "@/components/dashboard/inventory-table";
 import { ShippedTable } from "@/components/dashboard/shipped-table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Package, Truck, DollarSign, AlertCircle, Mail, MessageCircle } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { hasRole } from "@/lib/permissions";
+
+type EbayConnectionDoc = {
+  selectedListingIds?: string[];
+};
 
 export default function DashboardPage() {
   const { userProfile } = useAuth();
@@ -43,6 +48,9 @@ export default function DashboardPage() {
     loading: invoicesLoading
   } = useCollection<Invoice>(
     userProfile ? `users/${userProfile.uid}/invoices` : ""
+  );
+  const { data: ebayConnections } = useCollection<EbayConnectionDoc>(
+    userProfile ? `users/${userProfile.uid}/ebayConnections` : ""
   );
 
   // Calculate total quantity of all inventory items
@@ -97,6 +105,17 @@ export default function DashboardPage() {
       return itemDateString === currentDate;
     }).length;
   }, [shippedData, currentDate]);
+
+  const selectedEbayListingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const conn of ebayConnections) {
+      const list = Array.isArray(conn.selectedListingIds) ? conn.selectedListingIds : [];
+      for (const id of list) {
+        if (typeof id === "string" && id.trim()) ids.add(id.trim());
+      }
+    }
+    return Array.from(ids);
+  }, [ebayConnections]);
 
   return (
     <div className="space-y-6">
@@ -214,6 +233,20 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="p-6">
+                <div className="mb-4 rounded-lg border p-3">
+                  <p className="text-sm font-medium mb-2">Selected eBay Listings</p>
+                  {selectedEbayListingIds.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No eBay listings selected yet.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto">
+                      {selectedEbayListingIds.map((id) => (
+                        <Badge key={id} variant="secondary" className="font-mono text-xs">
+                          {id}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <InventoryTable data={inventoryData} />
               </div>
             )}
