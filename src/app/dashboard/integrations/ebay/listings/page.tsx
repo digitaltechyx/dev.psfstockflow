@@ -153,10 +153,19 @@ export default function EbayListingsPage() {
       const selectedRows = listings.filter((l) => selectedIds.has(getSelectionKey(l)));
       const offerIds = Array.from(new Set(selectedRows.map((l) => l.offerId).filter(Boolean)));
       const listingIds = Array.from(new Set(selectedRows.map((l) => l.listingId).filter(Boolean)));
+      const selectedListings = selectedRows.map((l) => ({
+        id: getSelectionKey(l),
+        offerId: l.offerId || undefined,
+        listingId: l.listingId || undefined,
+        title: l.title || undefined,
+        sku: l.sku || undefined,
+        status: l.status || undefined,
+        source: l.source || "inventory",
+      }));
       const res = await fetch("/api/integrations/ebay/selected-listings", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ offerIds, listingIds, connectionId: connectionId || undefined }),
+        body: JSON.stringify({ offerIds, listingIds, selectedListings, connectionId: connectionId || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

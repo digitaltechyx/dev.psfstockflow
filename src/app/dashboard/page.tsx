@@ -7,7 +7,6 @@ import { InventoryTable } from "@/components/dashboard/inventory-table";
 import { ShippedTable } from "@/components/dashboard/shipped-table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Package, Truck, DollarSign, AlertCircle, Mail, MessageCircle } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -15,6 +14,15 @@ import { hasRole } from "@/lib/permissions";
 
 type EbayConnectionDoc = {
   selectedListingIds?: string[];
+  selectedListings?: Array<{
+    id?: string;
+    title?: string;
+    sku?: string;
+    status?: string;
+    source?: "inventory" | "trading";
+    listingId?: string;
+    offerId?: string;
+  }>;
 };
 
 export default function DashboardPage() {
@@ -106,15 +114,35 @@ export default function DashboardPage() {
     }).length;
   }, [shippedData, currentDate]);
 
-  const selectedEbayListingIds = useMemo(() => {
-    const ids = new Set<string>();
+  const selectedEbayListings = useMemo(() => {
+    const rows = new Map<string, { id: string; title: string; sku: string; status: string; source: string }>();
     for (const conn of ebayConnections) {
+      const selectedMeta = Array.isArray(conn.selectedListings) ? conn.selectedListings : [];
+      for (const row of selectedMeta) {
+        const id = row.id || row.listingId || row.offerId || "";
+        if (!id) continue;
+        rows.set(id, {
+          id,
+          title: row.title || id,
+          sku: row.sku || "-",
+          status: row.status || "-",
+          source: row.source === "trading" ? "Seller Hub" : "Inventory API",
+        });
+      }
       const list = Array.isArray(conn.selectedListingIds) ? conn.selectedListingIds : [];
       for (const id of list) {
-        if (typeof id === "string" && id.trim()) ids.add(id.trim());
+        if (typeof id === "string" && id.trim() && !rows.has(id.trim())) {
+          rows.set(id.trim(), {
+            id: id.trim(),
+            title: id.trim(),
+            sku: "-",
+            status: "-",
+            source: "eBay",
+          });
+        }
       }
     }
-    return Array.from(ids);
+    return Array.from(rows.values());
   }, [ebayConnections]);
 
   return (
@@ -235,14 +263,18 @@ export default function DashboardPage() {
               <div className="p-6">
                 <div className="mb-4 rounded-lg border p-3">
                   <p className="text-sm font-medium mb-2">Selected eBay Listings</p>
-                  {selectedEbayListingIds.length === 0 ? (
+                  {selectedEbayListings.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No eBay listings selected yet.</p>
                   ) : (
-                    <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto">
-                      {selectedEbayListingIds.map((id) => (
-                        <Badge key={id} variant="secondary" className="font-mono text-xs">
-                          {id}
-                        </Badge>
+                    <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                      {selectedEbayListings.map((row) => (
+                        <div key={row.id} className="rounded-md border p-2">
+                          <p className="text-sm font-medium truncate">{row.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {row.sku !== "-" ? `SKU: ${row.sku} · ` : ""}
+                            {row.status} · {row.source}
+                          </p>
+                        </div>
                       ))}
                     </div>
                   )}

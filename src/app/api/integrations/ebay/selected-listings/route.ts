@@ -5,6 +5,15 @@ import { getValidEbayToken, getEbayApiBaseUrl } from "@/lib/ebay-api";
 export const dynamic = "force-dynamic";
 
 const MAX_OFFERS_TO_RESOLVE = 100;
+type SelectedListingMeta = {
+  id: string;
+  offerId?: string;
+  listingId?: string;
+  title?: string;
+  sku?: string;
+  status?: string;
+  source?: "inventory" | "trading";
+};
 
 /** GET: return selected offer IDs for the user's eBay connection. */
 export async function GET(request: NextRequest) {
@@ -42,7 +51,8 @@ export async function GET(request: NextRequest) {
     }
     const selectedOfferIds = Array.isArray(data.selectedOfferIds) ? data.selectedOfferIds : [];
     const selectedListingIds = Array.isArray(data.selectedListingIds) ? data.selectedListingIds : [];
-    return NextResponse.json({ selectedOfferIds, selectedListingIds });
+    const selectedListings = Array.isArray(data.selectedListings) ? data.selectedListings : [];
+    return NextResponse.json({ selectedOfferIds, selectedListingIds, selectedListings });
   } catch (err: unknown) {
     console.error("[ebay selected-listings GET]", err);
     return NextResponse.json(
@@ -78,6 +88,30 @@ export async function POST(request: NextRequest) {
     : [];
   const listingIdsFromClient = Array.isArray(body.listingIds)
     ? body.listingIds.filter((id: unknown) => typeof id === "string")
+    : [];
+  const selectedListingsFromClient: SelectedListingMeta[] = Array.isArray(body.selectedListings)
+    ? body.selectedListings
+        .filter((x: unknown) => x && typeof x === "object")
+        .map((x) => x as Record<string, unknown>)
+        .map((x) => {
+          const listingId = typeof x.listingId === "string" ? x.listingId.trim() : undefined;
+          const offerId = typeof x.offerId === "string" ? x.offerId.trim() : undefined;
+          const id =
+            (typeof x.id === "string" && x.id.trim()) ||
+            listingId ||
+            offerId ||
+            "";
+          return {
+            id,
+            offerId,
+            listingId,
+            title: typeof x.title === "string" ? x.title : undefined,
+            sku: typeof x.sku === "string" ? x.sku : undefined,
+            status: typeof x.status === "string" ? x.status : undefined,
+            source: x.source === "trading" ? "trading" : "inventory",
+          } as SelectedListingMeta;
+        })
+        .filter((x) => x.id)
     : [];
   const connectionId = typeof body.connectionId === "string" ? body.connectionId.trim() : undefined;
 
@@ -131,14 +165,21 @@ export async function POST(request: NextRequest) {
 
     const dedupedListingIds = Array.from(new Set(listingIds.filter(Boolean)));
 
+    const selectedListingsMap = new Map<string, SelectedListingMeta>();
+    for (const row of selectedListingsFromClient) {
+      selectedListingsMap.set(row.id, row);
+    }
+
     await docRef.update({
       selectedOfferIds: offerIds,
       selectedListingIds: dedupedListingIds,
+      selectedListings: Array.from(selectedListingsMap.values()),
     });
     return NextResponse.json({
       ok: true,
       selectedOfferIds: offerIds,
       selectedListingIds: dedupedListingIds,
+      selectedListings: Array.from(selectedListingsMap.values()),
     });
   } catch (err: unknown) {
     console.error("[ebay selected-listings POST]", err);
