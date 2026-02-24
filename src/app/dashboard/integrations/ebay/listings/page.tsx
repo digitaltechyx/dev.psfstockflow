@@ -16,6 +16,7 @@ type EbayListingRow = {
   sku: string;
   title: string;
   status: string;
+  quantity?: number;
   listingId?: string;
   source?: "inventory" | "trading";
 };
@@ -160,6 +161,7 @@ export default function EbayListingsPage() {
         title: l.title || undefined,
         sku: l.sku || undefined,
         status: l.status || undefined,
+        quantity: typeof l.quantity === "number" ? l.quantity : undefined,
         source: l.source || "inventory",
       }));
       const res = await fetch("/api/integrations/ebay/selected-listings", {
@@ -318,7 +320,7 @@ export default function EbayListingsPage() {
                       <div className="min-w-0 flex-1">
                         <p className="font-medium truncate">{l.title || "—"}</p>
                         <p className="text-sm text-muted-foreground">
-                          SKU: {l.sku} · {l.status}
+                          SKU: {l.sku} · Qty: {typeof l.quantity === "number" ? l.quantity : 0} · {l.status}
                           {l.source === "trading" ? " · Seller Hub" : ""}
                         </p>
                       </div>

@@ -11,9 +11,9 @@ const TRADING_PAGE_SIZE = 200;
 const TRADING_COMPAT_LEVEL = "1209";
 
 type InventoryItemRef = { sku: string };
-type OfferItem = { offerId?: string; sku?: string; status?: string; listingId?: string };
+type OfferItem = { offerId?: string; sku?: string; status?: string; listingId?: string; availableQuantity?: number };
 type InventoryProduct = { product?: { title?: string } };
-type TradingListingItem = { itemId: string; title: string; status: string };
+type TradingListingItem = { itemId: string; title: string; status: string; quantity?: number };
 
 function toArray<T>(value: T | T[] | undefined | null): T[] {
   if (Array.isArray(value)) return value;
@@ -74,12 +74,12 @@ async function fetchTradingActiveListings(
               | {
                   ItemID?: string;
                   Title?: string;
-                  SellingStatus?: { ListingStatus?: string };
+                  SellingStatus?: { ListingStatus?: string; QuantityAvailable?: string | number };
                 }
               | {
                   ItemID?: string;
                   Title?: string;
-                  SellingStatus?: { ListingStatus?: string };
+                  SellingStatus?: { ListingStatus?: string; QuantityAvailable?: string | number };
                 }[];
           };
           PaginationResult?: {
@@ -110,6 +110,7 @@ async function fetchTradingActiveListings(
         itemId,
         title: String(item.Title ?? "").trim() || `Listing ${itemId}`,
         status: String(item.SellingStatus?.ListingStatus ?? "ACTIVE").trim(),
+        quantity: Number(item.SellingStatus?.QuantityAvailable ?? 0) || 0,
       });
     }
 
@@ -209,6 +210,7 @@ export async function GET(request: NextRequest) {
       title: string;
       status: string;
       listingId?: string;
+      quantity?: number;
       source?: "inventory" | "trading";
     }[] = [];
 
@@ -238,6 +240,7 @@ export async function GET(request: NextRequest) {
             title,
             status: (o.status as string) ?? "UNKNOWN",
             listingId: o.listingId ?? undefined,
+            quantity: Number(o.availableQuantity ?? 0) || 0,
             source: "inventory" as const,
           }));
         })
@@ -259,6 +262,7 @@ export async function GET(request: NextRequest) {
         title: item.title,
         status: item.status || "ACTIVE",
         listingId: item.itemId,
+        quantity: item.quantity ?? 0,
         source: "trading",
       });
     }

@@ -19,6 +19,7 @@ type EbayConnectionDoc = {
     title?: string;
     sku?: string;
     status?: string;
+    quantity?: number;
     source?: "inventory" | "trading";
     listingId?: string;
     offerId?: string;
@@ -151,7 +152,7 @@ export default function DashboardPage() {
           id: `ebay-${id}`,
           productName: row.title || id,
           sku: row.sku || id,
-          quantity: 0,
+          quantity: typeof row.quantity === "number" ? row.quantity : 0,
           dateAdded: nowIso,
           status: stockStatus,
           source: "ebay",

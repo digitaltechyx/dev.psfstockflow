@@ -15,9 +15,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { collection, collectionGroup, getCountFromServer, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
+type EbayConnectionDoc = {
+  selectedListingIds?: string[];
+  selectedListings?: Array<{
+    id?: string;
+    title?: string;
+    sku?: string;
+    status?: string;
+    quantity?: number;
+    source?: "inventory" | "trading";
+    listingId?: string;
+    offerId?: string;
+  }>;
+};
 
 export default function AdminDashboardPage() {
-  const { userProfile: adminUser } = useAuth();
+  const { user, userProfile: adminUser } = useAuth();
   const { data: users, loading: usersLoading } = useCollection<UserProfile>("users");
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [userDialogOpen, setUserDialogOpen] = useState(false);
@@ -79,6 +92,70 @@ export default function AdminDashboardPage() {
   
   const { data: inventory, loading: inventoryLoading } = useCollection<InventoryItem>(inventoryPath);
   const { data: shipped, loading: shippedLoading } = useCollection<ShippedItem>(shippedPath);
+  const [ebayConnections, setEbayConnections] = useState<EbayConnectionDoc[]>([]);
+
+  useEffect(() => {
+    const fetchEbayConnections = async () => {
+      if (!user || !selectedUser?.uid) {
+        setEbayConnections([]);
+        return;
+      }
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch(`/api/integrations/ebay-connections?userId=${encodeURIComponent(selectedUser.uid)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          setEbayConnections([]);
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        setEbayConnections(Array.isArray(data.connections) ? (data.connections as EbayConnectionDoc[]) : []);
+      } catch {
+        setEbayConnections([]);
+      }
+    };
+    fetchEbayConnections();
+  }, [user, selectedUser?.uid]);
+
+  const mergedInventory = useMemo(() => {
+    const rows = new Map<string, InventoryItem>();
+    const nowIso = new Date().toISOString();
+    for (const conn of ebayConnections) {
+      const selectedMeta = Array.isArray(conn.selectedListings) ? conn.selectedListings : [];
+      for (const row of selectedMeta) {
+        const id = row.id || row.listingId || row.offerId || "";
+        if (!id) continue;
+        const listingStatus = (row.status || "").toLowerCase();
+        const stockStatus: "In Stock" | "Out of Stock" =
+          listingStatus.includes("active") || listingStatus.includes("published") ? "In Stock" : "Out of Stock";
+        rows.set(id, {
+          id: `ebay-${id}`,
+          productName: row.title || id,
+          sku: row.sku || id,
+          quantity: typeof row.quantity === "number" ? row.quantity : 0,
+          dateAdded: nowIso,
+          status: stockStatus,
+          source: "ebay",
+        });
+      }
+      const list = Array.isArray(conn.selectedListingIds) ? conn.selectedListingIds : [];
+      for (const id of list) {
+        if (typeof id === "string" && id.trim() && !rows.has(id.trim())) {
+          rows.set(id.trim(), {
+            id: `ebay-${id.trim()}`,
+            productName: id.trim(),
+            sku: id.trim(),
+            quantity: 0,
+            dateAdded: nowIso,
+            status: "Out of Stock",
+            source: "ebay",
+          });
+        }
+      }
+    }
+    return [...inventory, ...Array.from(rows.values())];
+  }, [ebayConnections, inventory]);
   const activeUsersCount = useMemo(() => {
     if (!users || !adminUser?.uid) return 0;
     return users.filter((user) => 
@@ -555,7 +632,7 @@ export default function AdminDashboardPage() {
           ) : (
             <AdminInventoryManagement 
               selectedUser={selectedUser}
-              inventory={inventory}
+              inventory={mergedInventory}
               shipped={shipped}
               loading={inventoryLoading}
             />

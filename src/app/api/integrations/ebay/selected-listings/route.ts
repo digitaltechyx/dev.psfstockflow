@@ -12,6 +12,7 @@ type SelectedListingMeta = {
   title?: string;
   sku?: string;
   status?: string;
+  quantity?: number;
   source?: "inventory" | "trading";
 };
 
@@ -104,6 +105,13 @@ export async function POST(request: NextRequest) {
           const title = typeof x.title === "string" ? x.title : "";
           const sku = typeof x.sku === "string" ? x.sku : "";
           const status = typeof x.status === "string" ? x.status : "";
+          const parsedQuantity =
+            typeof x.quantity === "number"
+              ? x.quantity
+              : typeof x.quantity === "string"
+                ? Number(x.quantity)
+                : NaN;
+          const quantity = Number.isFinite(parsedQuantity) && parsedQuantity >= 0 ? parsedQuantity : undefined;
           const source: "inventory" | "trading" = x.source === "trading" ? "trading" : "inventory";
           return {
             id,
@@ -112,6 +120,7 @@ export async function POST(request: NextRequest) {
             ...(title ? { title } : {}),
             ...(sku ? { sku } : {}),
             ...(status ? { status } : {}),
+            ...(typeof quantity === "number" ? { quantity } : {}),
             source,
           } as SelectedListingMeta;
         })
