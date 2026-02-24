@@ -20,7 +20,7 @@ function isAuthorizedCron(request: NextRequest): boolean {
 }
 
 export async function runAutoSync(options?: { maxPages?: number; maxConnections?: number }) {
-  const maxPages = options?.maxPages ?? 5;
+  const maxPages = options?.maxPages ?? 10;
   const maxConnections = options?.maxConnections ?? MAX_CONNECTIONS_PER_RUN;
   const db = adminDb();
   const connectionsSnap = await db.collectionGroup("ebayConnections").limit(maxConnections).get();
@@ -48,7 +48,7 @@ export async function runAutoSync(options?: { maxPages?: number; maxConnections?
     const result = await syncEbayOrdersForConnection({
       uid,
       connectionId,
-      filterNotStarted: true,
+      filterNotStarted: false,
       maxPages,
       pageSize: 50,
     });

@@ -9,10 +9,15 @@ import type { UserProfile, InventoryItem, ShippedItem } from "@/types";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { hasRole } from "@/lib/permissions";
 import { clearFirestoreCache as clearCache } from "@/lib/firebase";
+
+type EbayConnectionDoc = {
+  selectedListingIds?: string[];
+};
 
 function InventoryContent() {
   const router = useRouter();
@@ -109,6 +114,19 @@ function InventoryContent() {
   const { data: shipped, loading: shippedLoading, error: shippedError } = useCollection<ShippedItem>(
     isValidUserId ? `users/${normalizedUserId}/shipped` : ""
   );
+  const { data: ebayConnections } = useCollection<EbayConnectionDoc>(
+    isValidUserId ? `users/${normalizedUserId}/ebayConnections` : ""
+  );
+  const selectedEbayListingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const conn of ebayConnections) {
+      const list = Array.isArray(conn.selectedListingIds) ? conn.selectedListingIds : [];
+      for (const id of list) {
+        if (typeof id === "string" && id.trim()) ids.add(id.trim());
+      }
+    }
+    return Array.from(ids);
+  }, [ebayConnections]);
 
   return (
     <Card className="border-2 shadow-xl overflow-hidden">
@@ -251,15 +269,41 @@ function InventoryContent() {
             <Skeleton className="h-64 w-full rounded-xl" />
           </div>
         ) : (
-          <AdminInventoryManagement 
-            selectedUser={selectedUser}
-            inventory={inventory}
-            shipped={shipped}
-            loading={inventoryLoading}
-            initialSection={section || undefined}
-            initialRequestTab={tab || undefined}
-            initialRequestId={requestId || undefined}
-          />
+          <div className="space-y-6">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Selected eBay Listings</CardTitle>
+                <CardDescription>
+                  Listings selected for order sync/fulfillment for this user.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {selectedEbayListingIds.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No eBay listings selected yet.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2 max-h-44 overflow-y-auto pr-1">
+                    {selectedEbayListingIds.map((id) => (
+                      <Badge key={id} variant="secondary" className="font-mono text-xs">
+                        {id}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <AdminInventoryManagement
+              selectedUser={selectedUser}
+              inventory={inventory}
+              shipped={shipped}
+              loading={inventoryLoading}
+              initialSection={section || undefined}
+              initialRequestTab={tab || undefined}
+              initialRequestId={requestId || undefined}
+            />
+          </div>
         )}
       </CardContent>
     </Card>

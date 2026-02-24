@@ -91,8 +91,8 @@ export async function POST(request: NextRequest) {
     payload,
   });
 
-  // Webhook-first behavior: lightweight near real-time sync for selected listings.
-  const result = await runAutoSync({ maxPages: 2, maxConnections: 25 });
+  // Webhook-first behavior: near real-time sync for selected listings across all statuses.
+  const result = await runAutoSync({ maxPages: 10, maxConnections: 25 });
   await eventRef.set(
     {
       processedAt: new Date().toISOString(),
