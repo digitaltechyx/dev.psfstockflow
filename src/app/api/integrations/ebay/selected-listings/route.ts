@@ -74,7 +74,10 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const offerIds = Array.isArray(body.offerIds)
-    ? body.offerIds.filter((id: unknown) => typeof id === "string")
+    ? Array.from(new Set(body.offerIds.filter((id: unknown) => typeof id === "string")))
+    : [];
+  const listingIdsFromClient = Array.isArray(body.listingIds)
+    ? body.listingIds.filter((id: unknown) => typeof id === "string")
     : [];
   const connectionId = typeof body.connectionId === "string" ? body.connectionId.trim() : undefined;
 
@@ -102,8 +105,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve listingIds for selected offers (for order filtering). Cap to avoid timeout.
-    const conn = await getValidEbayToken(uid);
-    const listingIds: string[] = [];
+    const conn = await getValidEbayToken(uid, connectionId);
+    const listingIds: string[] = [...listingIdsFromClient];
     if (conn && offerIds.length > 0) {
       const base = getEbayApiBaseUrl(conn.isSandbox);
       const toResolve = offerIds.slice(0, MAX_OFFERS_TO_RESOLVE);
@@ -126,14 +129,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const dedupedListingIds = Array.from(new Set(listingIds.filter(Boolean)));
+
     await docRef.update({
       selectedOfferIds: offerIds,
-      selectedListingIds: listingIds,
+      selectedListingIds: dedupedListingIds,
     });
     return NextResponse.json({
       ok: true,
       selectedOfferIds: offerIds,
-      selectedListingIds: listingIds,
+      selectedListingIds: dedupedListingIds,
     });
   } catch (err: unknown) {
     console.error("[ebay selected-listings POST]", err);

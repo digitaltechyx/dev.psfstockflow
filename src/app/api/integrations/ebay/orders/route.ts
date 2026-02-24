@@ -1,36 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
-import { getValidEbayToken, getEbayApiBaseUrl } from "@/lib/ebay-api";
+import { syncEbayOrdersForConnection } from "@/lib/ebay-order-sync";
 
 export const dynamic = "force-dynamic";
-
-const ORDERS_PAGE_SIZE = 50;
-const MAX_ORDER_PAGES = 20; // cap ~1000 orders per sync
-
-type EbayLineItem = {
-  lineItemId?: string;
-  legacyItemId?: string;
-  sku?: string;
-  title?: string;
-  quantity?: number;
-  lineItemFulfillmentStatus?: string;
-};
-
-type EbayOrder = {
-  orderId?: string;
-  creationDate?: string;
-  lastModifiedDate?: string;
-  orderFulfillmentStatus?: string;
-  orderPaymentStatus?: string;
-  lineItems?: EbayLineItem[];
-  buyer?: { email?: string; fullName?: string };
-};
-
-type OrderSearchResponse = {
-  orders?: EbayOrder[];
-  next?: string;
-  total?: number;
-};
 
 function isAdminOrSubAdmin(data: Record<string, unknown> | undefined): boolean {
   if (!data) return false;
@@ -122,112 +94,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const conn = await getValidEbayToken(uid, connectionId);
-  if (!conn) {
-    return NextResponse.json(
-      { error: "No eBay connection. Connect your eBay account in Integrations first." },
-      { status: 400 }
-    );
-  }
-
-  const db = adminDb();
-  const connectionRef = db.collection("users").doc(uid).collection("ebayConnections").doc(conn.connectionId);
-  const connectionSnap = await connectionRef.get();
-  if (!connectionSnap.exists) {
-    return NextResponse.json({ error: "No eBay connection" }, { status: 400 });
-  }
-  const connectionData = connectionSnap.data() ?? {};
-  const selectedListingIds = Array.isArray(connectionData.selectedListingIds)
-    ? connectionData.selectedListingIds as string[]
-    : [];
-  const selectedSet = new Set(selectedListingIds);
-
-  const base = getEbayApiBaseUrl(conn.isSandbox);
-  const ordersCol = db.collection("users").doc(uid).collection("ebayOrders");
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${conn.accessToken}`,
-    "Content-Type": "application/json",
-    "Accept-Language": "en-US",
-    "Content-Language": "en-US",
-  };
-
-  let totalFetched = 0;
-  let totalSaved = 0;
-  let nextUrl: string | null = `${base}/sell/fulfillment/v1/order?limit=${ORDERS_PAGE_SIZE}`;
   const filter = request.nextUrl.searchParams.get("filter");
-  if (filter === "not_started") {
-    nextUrl = `${base}/sell/fulfillment/v1/order?limit=${ORDERS_PAGE_SIZE}&filter=orderfulfillmentstatus%3A%7BNOT_STARTED%7CIN_PROGRESS%7D`;
+  const result = await syncEbayOrdersForConnection({
+    uid,
+    connectionId,
+    filterNotStarted: filter === "not_started",
+    maxPages: 20,
+    pageSize: 50,
+  });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error || "Sync failed" }, { status: 500 });
   }
-
-  try {
-    for (let page = 0; page < MAX_ORDER_PAGES && nextUrl; page++) {
-      const res = await fetch(nextUrl, { headers });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        console.error("[ebay orders getOrders]", res.status, err);
-        return NextResponse.json(
-          { error: "Failed to fetch eBay orders", detail: (err as { errors?: unknown }).errors },
-          { status: 502 }
-        );
-      }
-      const data = (await res.json()) as OrderSearchResponse;
-      const orders = data.orders ?? [];
-      totalFetched += orders.length;
-
-      for (const order of orders) {
-        const orderId = order.orderId;
-        if (!orderId) continue;
-
-        const lineItems = order.lineItems ?? [];
-        const selectedItems = selectedSet.size === 0
-          ? lineItems
-          : lineItems.filter(
-              (li) => li.legacyItemId && selectedSet.has(String(li.legacyItemId))
-            );
-        if (selectedItems.length === 0) continue;
-
-        const batch: Record<string, unknown> = {
-          orderId,
-          connectionId: conn.connectionId,
-          creationDate: order.creationDate ?? null,
-          lastModifiedDate: order.lastModifiedDate ?? null,
-          orderFulfillmentStatus: order.orderFulfillmentStatus ?? null,
-          orderPaymentStatus: order.orderPaymentStatus ?? null,
-          buyer: order.buyer
-            ? {
-                email: order.buyer.email,
-                fullName: order.buyer.fullName,
-              }
-            : null,
-          lineItems: selectedItems.map((li) => ({
-            lineItemId: li.lineItemId,
-            legacyItemId: li.legacyItemId,
-            sku: li.sku,
-            title: li.title,
-            quantity: li.quantity,
-            lineItemFulfillmentStatus: li.lineItemFulfillmentStatus,
-          })),
-          syncedAt: new Date().toISOString(),
-        };
-
-        await ordersCol.doc(orderId).set(batch, { merge: true });
-        totalSaved++;
-      }
-
-      nextUrl = data.next ?? null;
-      if (orders.length < ORDERS_PAGE_SIZE) break;
-    }
-
-    return NextResponse.json({
-      ok: true,
-      totalFetched,
-      totalSaved,
-    });
-  } catch (err: unknown) {
-    console.error("[ebay orders sync]", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Sync failed" },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json(result);
 }

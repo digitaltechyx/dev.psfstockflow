@@ -20,6 +20,10 @@ type EbayListingRow = {
   source?: "inventory" | "trading";
 };
 
+function getSelectionKey(listing: EbayListingRow): string {
+  return listing.offerId || listing.listingId || "";
+}
+
 export default function EbayListingsPage() {
   const searchParams = useSearchParams();
   const connectionId = searchParams.get("connectionId")?.trim() || undefined;
@@ -99,8 +103,9 @@ export default function EbayListingsPage() {
       });
       if (!res.ok) return;
       const data = await res.json();
-      const ids = (data.selectedOfferIds ?? []) as string[];
-      setSelectedIds(new Set(ids));
+      const offerIds = Array.isArray(data.selectedOfferIds) ? (data.selectedOfferIds as string[]) : [];
+      const listingIds = Array.isArray(data.selectedListingIds) ? (data.selectedListingIds as string[]) : [];
+      setSelectedIds(new Set([...offerIds, ...listingIds].filter(Boolean)));
     } catch {
       // ignore
     }
@@ -124,19 +129,20 @@ export default function EbayListingsPage() {
         )
       : listings;
 
-  const toggleOffer = (offerId: string) => {
-    if (!offerId) return;
+  const toggleListing = (selectionKey: string) => {
+    if (!selectionKey) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(offerId)) next.delete(offerId);
-      else next.add(offerId);
+      if (next.has(selectionKey)) next.delete(selectionKey);
+      else next.add(selectionKey);
       return next;
     });
   };
 
-  const selectable = listings.filter((l) => !!l.offerId);
+  const selectable = listings.filter((l) => !!getSelectionKey(l));
   const tradingOnlyCount = listings.filter((l) => !l.offerId).length;
-  const selectAll = () => setSelectedIds(new Set(filtered.filter((l) => !!l.offerId).map((l) => l.offerId)));
+  const selectAll = () =>
+    setSelectedIds(new Set(filtered.map((l) => getSelectionKey(l)).filter(Boolean)));
   const clearAll = () => setSelectedIds(new Set());
 
   const handleSave = async () => {
@@ -144,11 +150,13 @@ export default function EbayListingsPage() {
     setSaving(true);
     try {
       const token = await user.getIdToken();
-      const offerIds = Array.from(selectedIds);
+      const selectedRows = listings.filter((l) => selectedIds.has(getSelectionKey(l)));
+      const offerIds = Array.from(new Set(selectedRows.map((l) => l.offerId).filter(Boolean)));
+      const listingIds = Array.from(new Set(selectedRows.map((l) => l.listingId).filter(Boolean)));
       const res = await fetch("/api/integrations/ebay/selected-listings", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ offerIds, connectionId: connectionId || undefined }),
+        body: JSON.stringify({ offerIds, listingIds, connectionId: connectionId || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -156,7 +164,7 @@ export default function EbayListingsPage() {
       }
       toast({
         title: "Saved",
-        description: `${offerIds.length} listing(s) selected. Only orders for these will sync to PSF.`,
+        description: `${selectedRows.length} listing(s) selected. Only orders for these will sync to PSF.`,
       });
     } catch (e) {
       toast({
@@ -265,7 +273,7 @@ export default function EbayListingsPage() {
               {tradingOnlyCount > 0 && (
                 <p className="text-sm text-muted-foreground border-l-4 border-blue-500 pl-3 py-1">
                   Showing {tradingOnlyCount} active Seller Hub listing{tradingOnlyCount !== 1 ? "s" : ""} that are not in
-                  Inventory API. They are visible now; selection/sync support for these is the next step.
+                  Inventory API. These are selectable and included in order sync.
                 </p>
               )}
               <div className="flex flex-wrap items-center gap-2">
@@ -282,32 +290,35 @@ export default function EbayListingsPage() {
                   Clear
                 </Button>
                 <span className="text-sm text-muted-foreground">
-                  {selectedIds.size} of {selectable.length} selectable
+                  {selectedIds.size} of {selectable.length} selected
                 </span>
               </div>
               <div className="border rounded-lg divide-y max-h-[60vh] overflow-y-auto">
-                {filtered.map((l) => (
-                  <label
-                    key={l.offerId || l.listingId || l.sku}
-                    className="flex items-center gap-3 px-4 py-2 hover:bg-muted/50 cursor-pointer"
-                  >
-                    <Checkbox
-                      disabled={!l.offerId}
-                      checked={selectedIds.has(l.offerId)}
-                      onCheckedChange={() => toggleOffer(l.offerId)}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium truncate">{l.title || "—"}</p>
-                      <p className="text-sm text-muted-foreground">
-                        SKU: {l.sku} · {l.status}
-                        {l.source === "trading" ? " · Seller Hub" : ""}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-xs text-muted-foreground truncate max-w-[120px]">
-                      {l.offerId || l.listingId}
-                    </div>
-                  </label>
-                ))}
+                {filtered.map((l) => {
+                  const selectionKey = getSelectionKey(l);
+                  return (
+                    <label
+                      key={l.offerId || l.listingId || l.sku}
+                      className="flex items-center gap-3 px-4 py-2 hover:bg-muted/50 cursor-pointer"
+                    >
+                      <Checkbox
+                        disabled={!selectionKey}
+                        checked={selectedIds.has(selectionKey)}
+                        onCheckedChange={() => toggleListing(selectionKey)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{l.title || "—"}</p>
+                        <p className="text-sm text-muted-foreground">
+                          SKU: {l.sku} · {l.status}
+                          {l.source === "trading" ? " · Seller Hub" : ""}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-xs text-muted-foreground truncate max-w-[120px]">
+                        {l.offerId || l.listingId}
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
               <div className="flex justify-end">
                 <Button onClick={handleSave} disabled={saving}>
