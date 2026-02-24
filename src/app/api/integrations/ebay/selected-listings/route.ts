@@ -101,14 +101,18 @@ export async function POST(request: NextRequest) {
             listingId ||
             offerId ||
             "";
+          const title = typeof x.title === "string" ? x.title : "";
+          const sku = typeof x.sku === "string" ? x.sku : "";
+          const status = typeof x.status === "string" ? x.status : "";
+          const source: "inventory" | "trading" = x.source === "trading" ? "trading" : "inventory";
           return {
             id,
-            offerId,
-            listingId,
-            title: typeof x.title === "string" ? x.title : undefined,
-            sku: typeof x.sku === "string" ? x.sku : undefined,
-            status: typeof x.status === "string" ? x.status : undefined,
-            source: x.source === "trading" ? "trading" : "inventory",
+            ...(offerId ? { offerId } : {}),
+            ...(listingId ? { listingId } : {}),
+            ...(title ? { title } : {}),
+            ...(sku ? { sku } : {}),
+            ...(status ? { status } : {}),
+            source,
           } as SelectedListingMeta;
         })
         .filter((x) => x.id)
