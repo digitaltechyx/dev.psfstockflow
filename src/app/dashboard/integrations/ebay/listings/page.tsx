@@ -16,6 +16,8 @@ type EbayListingRow = {
   sku: string;
   title: string;
   status: string;
+  listingId?: string;
+  source?: "inventory" | "trading";
 };
 
 export default function EbayListingsPage() {
@@ -30,6 +32,7 @@ export default function EbayListingsPage() {
   const [ebayEnvironment, setEbayEnvironment] = useState<"sandbox" | "production" | null>(null);
   const [inventoryItemCount, setInventoryItemCount] = useState<number | null>(null);
   const [ebayReportedTotal, setEbayReportedTotal] = useState<number | null>(null);
+  const [tradingActiveCount, setTradingActiveCount] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
@@ -53,6 +56,7 @@ export default function EbayListingsPage() {
         setEbayEnvironment(null);
         setInventoryItemCount(null);
         setEbayReportedTotal(null);
+        setTradingActiveCount(null);
         toast({
           variant: "destructive",
           title: "Error",
@@ -64,6 +68,7 @@ export default function EbayListingsPage() {
       setEbayEnvironment((data.environment as "sandbox" | "production") ?? null);
       setInventoryItemCount(typeof data.inventoryItemCount === "number" ? data.inventoryItemCount : null);
       setEbayReportedTotal(typeof data.ebayReportedTotal === "number" ? data.ebayReportedTotal : null);
+      setTradingActiveCount(typeof data.tradingActiveCount === "number" ? data.tradingActiveCount : null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load eBay listings.";
       setLoadError(msg);
@@ -71,6 +76,7 @@ export default function EbayListingsPage() {
       setEbayEnvironment(null);
       setInventoryItemCount(null);
       setEbayReportedTotal(null);
+      setTradingActiveCount(null);
       toast({
         variant: "destructive",
         title: "Error",
@@ -113,11 +119,13 @@ export default function EbayListingsPage() {
           (l) =>
             l.title.toLowerCase().includes(search.toLowerCase()) ||
             l.sku.toLowerCase().includes(search.toLowerCase()) ||
-            l.offerId.toLowerCase().includes(search.toLowerCase())
+            l.offerId.toLowerCase().includes(search.toLowerCase()) ||
+            (l.listingId || "").toLowerCase().includes(search.toLowerCase())
         )
       : listings;
 
   const toggleOffer = (offerId: string) => {
+    if (!offerId) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(offerId)) next.delete(offerId);
@@ -126,7 +134,9 @@ export default function EbayListingsPage() {
     });
   };
 
-  const selectAll = () => setSelectedIds(new Set(filtered.map((l) => l.offerId)));
+  const selectable = listings.filter((l) => !!l.offerId);
+  const tradingOnlyCount = listings.filter((l) => !l.offerId).length;
+  const selectAll = () => setSelectedIds(new Set(filtered.filter((l) => !!l.offerId).map((l) => l.offerId)));
   const clearAll = () => setSelectedIds(new Set());
 
   const handleSave = async () => {
@@ -185,6 +195,11 @@ export default function EbayListingsPage() {
               {inventoryItemCount !== null && (
                 <span className="text-muted-foreground font-normal ml-2">
                   ({inventoryItemCount} inventory item{inventoryItemCount !== 1 ? "s" : ""} from eBay)
+                </span>
+              )}
+              {tradingActiveCount !== null && (
+                <span className="text-muted-foreground font-normal ml-2">
+                  ({tradingActiveCount} active listing{tradingActiveCount !== 1 ? "s" : ""} from Seller Hub)
                 </span>
               )}
             </p>
@@ -247,6 +262,12 @@ export default function EbayListingsPage() {
             </div>
           ) : (
             <>
+              {tradingOnlyCount > 0 && (
+                <p className="text-sm text-muted-foreground border-l-4 border-blue-500 pl-3 py-1">
+                  Showing {tradingOnlyCount} active Seller Hub listing{tradingOnlyCount !== 1 ? "s" : ""} that are not in
+                  Inventory API. They are visible now; selection/sync support for these is the next step.
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-2">
                 <Input
                   placeholder="Search by title, SKU, or offer ID…"
@@ -261,16 +282,17 @@ export default function EbayListingsPage() {
                   Clear
                 </Button>
                 <span className="text-sm text-muted-foreground">
-                  {selectedIds.size} of {listings.length} selected
+                  {selectedIds.size} of {selectable.length} selectable
                 </span>
               </div>
               <div className="border rounded-lg divide-y max-h-[60vh] overflow-y-auto">
                 {filtered.map((l) => (
                   <label
-                    key={l.offerId}
+                    key={l.offerId || l.listingId || l.sku}
                     className="flex items-center gap-3 px-4 py-2 hover:bg-muted/50 cursor-pointer"
                   >
                     <Checkbox
+                      disabled={!l.offerId}
                       checked={selectedIds.has(l.offerId)}
                       onCheckedChange={() => toggleOffer(l.offerId)}
                     />
@@ -278,10 +300,11 @@ export default function EbayListingsPage() {
                       <p className="font-medium truncate">{l.title || "—"}</p>
                       <p className="text-sm text-muted-foreground">
                         SKU: {l.sku} · {l.status}
+                        {l.source === "trading" ? " · Seller Hub" : ""}
                       </p>
                     </div>
                     <div className="shrink-0 text-xs text-muted-foreground truncate max-w-[120px]">
-                      {l.offerId}
+                      {l.offerId || l.listingId}
                     </div>
                   </label>
                 ))}

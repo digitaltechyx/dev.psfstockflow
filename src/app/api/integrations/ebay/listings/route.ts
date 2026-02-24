@@ -1,15 +1,125 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
 import { getValidEbayToken, getEbayApiBaseUrl } from "@/lib/ebay-api";
+import { XMLParser } from "fast-xml-parser";
 
 export const dynamic = "force-dynamic";
 
 const LISTINGS_PAGE_SIZE = 50;
 const SKU_BATCH = 5;
+const TRADING_PAGE_SIZE = 200;
+const TRADING_COMPAT_LEVEL = "1209";
 
 type InventoryItemRef = { sku: string };
 type OfferItem = { offerId?: string; sku?: string; status?: string; listingId?: string };
 type InventoryProduct = { product?: { title?: string } };
+type TradingListingItem = { itemId: string; title: string; status: string };
+
+function toArray<T>(value: T | T[] | undefined | null): T[] {
+  if (Array.isArray(value)) return value;
+  if (value == null) return [];
+  return [value];
+}
+
+async function fetchTradingActiveListings(
+  base: string,
+  accessToken: string
+): Promise<{ items: TradingListingItem[]; total: number }> {
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    removeNSPrefix: true,
+    trimValues: true,
+  });
+  const items: TradingListingItem[] = [];
+  let pageNumber = 1;
+  let totalPages = 1;
+
+  while (pageNumber <= totalPages) {
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ActiveList>
+    <Include>true</Include>
+    <Pagination>
+      <EntriesPerPage>${TRADING_PAGE_SIZE}</EntriesPerPage>
+      <PageNumber>${pageNumber}</PageNumber>
+    </Pagination>
+  </ActiveList>
+</GetMyeBaySellingRequest>`;
+
+    const res = await fetch(`${base}/ws/api.dll`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/xml; charset=utf-8",
+        "X-EBAY-API-CALL-NAME": "GetMyeBaySelling",
+        "X-EBAY-API-SITEID": "0",
+        "X-EBAY-API-COMPATIBILITY-LEVEL": TRADING_COMPAT_LEVEL,
+        "X-EBAY-API-IAF-TOKEN": accessToken,
+      },
+      body,
+    });
+
+    const xml = await res.text();
+    if (!res.ok) {
+      console.error("[ebay listings GetMyeBaySelling]", res.status, xml.slice(0, 500));
+      break;
+    }
+
+    const parsed = parser.parse(xml) as {
+      GetMyeBaySellingResponse?: {
+        Ack?: string;
+        Errors?: { LongMessage?: string; ShortMessage?: string } | { LongMessage?: string; ShortMessage?: string }[];
+        ActiveList?: {
+          ItemArray?: {
+            Item?:
+              | {
+                  ItemID?: string;
+                  Title?: string;
+                  SellingStatus?: { ListingStatus?: string };
+                }
+              | {
+                  ItemID?: string;
+                  Title?: string;
+                  SellingStatus?: { ListingStatus?: string };
+                }[];
+          };
+          PaginationResult?: {
+            TotalNumberOfPages?: string | number;
+            TotalNumberOfEntries?: string | number;
+          };
+        };
+      };
+    };
+
+    const response = parsed.GetMyeBaySellingResponse;
+    const ack = (response?.Ack || "").toLowerCase();
+    if (ack && ack !== "success" && ack !== "warning") {
+      const err = toArray(response?.Errors)
+        .map((e) => e?.LongMessage || e?.ShortMessage)
+        .filter(Boolean)
+        .join(" | ");
+      console.error("[ebay listings GetMyeBaySelling Ack]", ack, err);
+      break;
+    }
+
+    const activeList = response?.ActiveList;
+    const pageItems = toArray(activeList?.ItemArray?.Item);
+    for (const item of pageItems) {
+      const itemId = String(item.ItemID ?? "").trim();
+      if (!itemId) continue;
+      items.push({
+        itemId,
+        title: String(item.Title ?? "").trim() || `Listing ${itemId}`,
+        status: String(item.SellingStatus?.ListingStatus ?? "ACTIVE").trim(),
+      });
+    }
+
+    const parsedTotalPages = Number(activeList?.PaginationResult?.TotalNumberOfPages ?? 1);
+    totalPages = Number.isFinite(parsedTotalPages) && parsedTotalPages > 0 ? parsedTotalPages : 1;
+    pageNumber += 1;
+  }
+
+  return { items, total: items.length };
+}
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -93,7 +203,14 @@ export async function GET(request: NextRequest) {
       else offset += LISTINGS_PAGE_SIZE;
     }
 
-    const listings: { offerId: string; sku: string; title: string; status: string }[] = [];
+    const listings: {
+      offerId: string;
+      sku: string;
+      title: string;
+      status: string;
+      listingId?: string;
+      source?: "inventory" | "trading";
+    }[] = [];
 
     for (let i = 0; i < skus.length; i += SKU_BATCH) {
       const batch = skus.slice(i, i + SKU_BATCH);
@@ -120,6 +237,8 @@ export async function GET(request: NextRequest) {
             sku: o.sku ?? sku,
             title,
             status: (o.status as string) ?? "UNKNOWN",
+            listingId: o.listingId ?? undefined,
+            source: "inventory" as const,
           }));
         })
       );
@@ -128,11 +247,28 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const inventoryListingIds = new Set(
+      listings.map((l) => (l.listingId || "").trim()).filter(Boolean)
+    );
+    const trading = await fetchTradingActiveListings(base, conn.accessToken);
+    const tradingOnly = trading.items.filter((item) => !inventoryListingIds.has(item.itemId));
+    for (const item of tradingOnly) {
+      listings.push({
+        offerId: "",
+        sku: item.itemId,
+        title: item.title,
+        status: item.status || "ACTIVE",
+        listingId: item.itemId,
+        source: "trading",
+      });
+    }
+
     return NextResponse.json({
       listings,
       environment: conn.isSandbox ? "sandbox" : "production",
       inventoryItemCount: skus.length,
       ebayReportedTotal: ebayReportedTotal,
+      tradingActiveCount: trading.total,
     });
   } catch (err: unknown) {
     console.error("[ebay listings]", err);
