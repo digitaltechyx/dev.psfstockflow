@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { adminAuth, adminDb, adminFieldValue } from "@/lib/firebase-admin";
 import { getValidEbayToken, getEbayApiBaseUrl } from "@/lib/ebay-api";
 
 export const dynamic = "force-dynamic";
 
 const MAX_OFFERS_TO_RESOLVE = 100;
+const EBAY_INVENTORY_SOURCE = "ebay";
 type SelectedListingMeta = {
   id: string;
   offerId?: string;
@@ -183,11 +184,67 @@ export async function POST(request: NextRequest) {
       selectedListingsMap.set(row.id, row);
     }
 
+    const connId = docRef.id;
     await docRef.update({
       selectedOfferIds: offerIds,
       selectedListingIds: dedupedListingIds,
       selectedListings: Array.from(selectedListingsMap.values()),
     });
+
+    // Sync selected eBay listings into user inventory (like Shopify): create/update inventory docs and lookup for auto-update + admin restock.
+    const FieldValue = adminFieldValue();
+    const invRef = adminDb().collection("users").doc(uid).collection("inventory");
+    const lookupRef = adminDb().collection("ebayInventoryLookup");
+    const selectedIds = new Set(selectedListingsMap.keys());
+
+    for (const row of selectedListingsMap.values()) {
+      const quantity = typeof row.quantity === "number" ? row.quantity : 0;
+      const listingStatus = (row.status || "").toLowerCase();
+      const status = listingStatus.includes("active") || listingStatus.includes("published") ? "In Stock" : "Out of Stock";
+      const docId = `ebay_${connId}_${row.id}`.replace(/\s/g, "_");
+      const inventoryPath = `users/${uid}/inventory/${docId}`;
+
+      await invRef.doc(docId).set(
+        {
+          productName: row.title || row.id,
+          sku: row.sku || row.id,
+          quantity,
+          status,
+          dateAdded: FieldValue.serverTimestamp(),
+          source: EBAY_INVENTORY_SOURCE,
+          ebayConnectionId: connId,
+          ...(row.offerId ? { ebayOfferId: row.offerId } : {}),
+          ...(row.listingId ? { ebayListingId: row.listingId } : {}),
+        },
+        { merge: true }
+      );
+
+      const lookupId = `${uid}_${connId}_${row.id}`.replace(/\s/g, "_");
+      await lookupRef.doc(lookupId).set(
+        {
+          userId: uid,
+          connectionId: connId,
+          inventoryPath,
+          listingKey: row.id,
+          ...(row.offerId ? { offerId: row.offerId } : {}),
+          ...(row.listingId ? { listingId: row.listingId } : {}),
+        },
+        { merge: true }
+      );
+    }
+
+    // Remove inventory docs and lookups for this connection that are no longer selected
+    const prefix = `ebay_${connId}_`;
+    const existingEbay = await invRef.where("source", "==", EBAY_INVENTORY_SOURCE).where("ebayConnectionId", "==", connId).get();
+    for (const d of existingEbay.docs) {
+      const key = d.id.startsWith(prefix) ? d.id.slice(prefix.length) : d.id;
+      if (!selectedIds.has(key)) {
+        await d.ref.delete();
+        const lookupId = `${uid}_${connId}_${key}`.replace(/\s/g, "_");
+        await lookupRef.doc(lookupId).delete();
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       selectedOfferIds: offerIds,

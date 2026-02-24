@@ -158,7 +158,44 @@ export function AdminInventoryManagement({
       });
     }
   };
-  
+
+  const syncEbayInventoryIfNeeded = async (
+    item: InventoryItem & { source?: string; ebayConnectionId?: string; ebayOfferId?: string; ebayListingId?: string },
+    newQuantity: number,
+    userId: string
+  ) => {
+    if (item.source !== "ebay" || !item.ebayConnectionId || !authUser) return;
+    if (!item.ebayOfferId && !item.ebayListingId) return;
+    try {
+      const token = await authUser.getIdToken();
+      const res = await fetch("/api/integrations/ebay/sync-inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          userId,
+          connectionId: item.ebayConnectionId,
+          offerId: item.ebayOfferId || undefined,
+          listingId: item.ebayListingId || undefined,
+          newQuantity,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          title: "PSF updated; eBay did not update",
+          description: typeof data.error === "string" ? data.error : "eBay quantity sync failed. Reconnect eBay in Integrations if needed.",
+        });
+      }
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "PSF updated; eBay did not update",
+        description: e instanceof Error ? e.message : "eBay sync failed.",
+      });
+    }
+  };
+
   // Debug authentication state
   console.log("=== ADMIN INVENTORY MANAGEMENT DEBUG ===");
   console.log("Admin user:", adminUser);
@@ -377,6 +414,7 @@ export function AdminInventoryManagement({
         status: "In Stock",
       });
       await syncShopifyInventoryIfNeeded(restockingProduct as any, newQuantity, selectedUser.uid);
+      await syncEbayInventoryIfNeeded(restockingProduct as any, newQuantity, selectedUser.uid);
 
       // Record restock history with selected date
       const restockHistoryRef = collection(db, `users/${selectedUser.uid}/restockHistory`);
@@ -1730,7 +1768,7 @@ export function AdminInventoryManagement({
                       </div>
                       {isEbayListing && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>Source: eBay selected listing</span>
+                          <span>Source: eBay · Restock syncs to eBay</span>
                         </div>
                       )}
                     </div>
@@ -1749,7 +1787,7 @@ export function AdminInventoryManagement({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>{isEbayListing ? "eBay rows are read-only here" : "Edit product details"}</p>
+                        <p>{isEbayListing ? "Edit not supported for eBay listings" : "Edit product details"}</p>
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -1757,7 +1795,6 @@ export function AdminInventoryManagement({
                         <Button
                           variant="outline"
                           size="sm"
-                          disabled={isEbayListing}
                           onClick={() => handleRestockProduct(item)}
                             className="w-full text-green-600 hover:text-green-700"
                         >
@@ -1766,7 +1803,7 @@ export function AdminInventoryManagement({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>{isEbayListing ? "eBay rows are read-only here" : "Restock product"}</p>
+                        <p>{isEbayListing ? "Restock product and update quantity on eBay" : "Restock product"}</p>
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -1783,7 +1820,7 @@ export function AdminInventoryManagement({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>{isEbayListing ? "eBay rows are read-only here" : "Move to Recycle Bin"}</p>
+                        <p>{isEbayListing ? "Recycle not supported for eBay listings" : "Move to Recycle Bin"}</p>
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -1800,7 +1837,7 @@ export function AdminInventoryManagement({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>{isEbayListing ? "eBay rows are read-only here" : "Permanently delete product"}</p>
+                        <p>{isEbayListing ? "Remove from Integrations → eBay listings" : "Permanently delete product"}</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>

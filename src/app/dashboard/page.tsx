@@ -12,22 +12,8 @@ import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { hasRole } from "@/lib/permissions";
 
-type EbayConnectionDoc = {
-  selectedListingIds?: string[];
-  selectedListings?: Array<{
-    id?: string;
-    title?: string;
-    sku?: string;
-    status?: string;
-    quantity?: number;
-    source?: "inventory" | "trading";
-    listingId?: string;
-    offerId?: string;
-  }>;
-};
-
 export default function DashboardPage() {
-  const { user, userProfile } = useAuth();
+  const { userProfile } = useAuth();
   const router = useRouter();
 
   // Redirect commission agents (without user role) to their affiliate dashboard
@@ -58,31 +44,6 @@ export default function DashboardPage() {
   } = useCollection<Invoice>(
     userProfile ? `users/${userProfile.uid}/invoices` : ""
   );
-  const [ebayConnections, setEbayConnections] = useState<EbayConnectionDoc[]>([]);
-
-  useEffect(() => {
-    const fetchEbayConnections = async () => {
-      if (!user) {
-        setEbayConnections([]);
-        return;
-      }
-      try {
-        const token = await user.getIdToken();
-        const res = await fetch("/api/integrations/ebay-connections", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          setEbayConnections([]);
-          return;
-        }
-        const data = await res.json().catch(() => ({}));
-        setEbayConnections(Array.isArray(data.connections) ? (data.connections as EbayConnectionDoc[]) : []);
-      } catch {
-        setEbayConnections([]);
-      }
-    };
-    fetchEbayConnections();
-  }, [user]);
 
   // Calculate total quantity of all inventory items
   const totalItemsInInventory = useMemo(() => {
@@ -136,45 +97,6 @@ export default function DashboardPage() {
       return itemDateString === currentDate;
     }).length;
   }, [shippedData, currentDate]);
-
-  const mergedInventoryData = useMemo(() => {
-    const rows = new Map<string, InventoryItem>();
-    const nowIso = new Date().toISOString();
-    for (const conn of ebayConnections) {
-      const selectedMeta = Array.isArray(conn.selectedListings) ? conn.selectedListings : [];
-      for (const row of selectedMeta) {
-        const id = row.id || row.listingId || row.offerId || "";
-        if (!id) continue;
-        const listingStatus = (row.status || "").toLowerCase();
-        const stockStatus: "In Stock" | "Out of Stock" =
-          listingStatus.includes("active") || listingStatus.includes("published") ? "In Stock" : "Out of Stock";
-        rows.set(id, {
-          id: `ebay-${id}`,
-          productName: row.title || id,
-          sku: row.sku || id,
-          quantity: typeof row.quantity === "number" ? row.quantity : 0,
-          dateAdded: nowIso,
-          status: stockStatus,
-          source: "ebay",
-        });
-      }
-      const list = Array.isArray(conn.selectedListingIds) ? conn.selectedListingIds : [];
-      for (const id of list) {
-        if (typeof id === "string" && id.trim() && !rows.has(id.trim())) {
-          rows.set(id.trim(), {
-            id: `ebay-${id.trim()}`,
-            productName: id.trim(),
-            sku: id.trim(),
-            quantity: 0,
-            dateAdded: nowIso,
-            status: "Out of Stock",
-            source: "ebay",
-          });
-        }
-      }
-    }
-    return [...inventoryData, ...Array.from(rows.values())];
-  }, [ebayConnections, inventoryData]);
 
   return (
     <div className="space-y-6">
@@ -292,7 +214,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="p-6">
-                <InventoryTable data={mergedInventoryData} />
+                <InventoryTable data={inventoryData} />
               </div>
             )}
           </CardContent>

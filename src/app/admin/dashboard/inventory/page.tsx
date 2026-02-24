@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Package, Users, ChevronsUpDown } from "lucide-react";
 import { AdminInventoryManagement } from "@/components/admin/admin-inventory-management";
 import { useCollection } from "@/hooks/use-collection";
-import { useAuth } from "@/hooks/use-auth";
 import type { UserProfile, InventoryItem, ShippedItem } from "@/types";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,22 +14,7 @@ import { Input } from "@/components/ui/input";
 import { hasRole } from "@/lib/permissions";
 import { clearFirestoreCache as clearCache } from "@/lib/firebase";
 
-type EbayConnectionDoc = {
-  selectedListingIds?: string[];
-  selectedListings?: Array<{
-    id?: string;
-    title?: string;
-    sku?: string;
-    status?: string;
-    quantity?: number;
-    source?: "inventory" | "trading";
-    listingId?: string;
-    offerId?: string;
-  }>;
-};
-
 function InventoryContent() {
-  const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const userId = searchParams.get("userId");
@@ -125,68 +109,6 @@ function InventoryContent() {
   const { data: shipped, loading: shippedLoading, error: shippedError } = useCollection<ShippedItem>(
     isValidUserId ? `users/${normalizedUserId}/shipped` : ""
   );
-  const [ebayConnections, setEbayConnections] = useState<EbayConnectionDoc[]>([]);
-  React.useEffect(() => {
-    const fetchEbayConnections = async () => {
-      if (!user || !isValidUserId || !normalizedUserId) {
-        setEbayConnections([]);
-        return;
-      }
-      try {
-        const token = await user.getIdToken();
-        const res = await fetch(`/api/integrations/ebay-connections?userId=${encodeURIComponent(normalizedUserId)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          setEbayConnections([]);
-          return;
-        }
-        const data = await res.json().catch(() => ({}));
-        setEbayConnections(Array.isArray(data.connections) ? (data.connections as EbayConnectionDoc[]) : []);
-      } catch {
-        setEbayConnections([]);
-      }
-    };
-    fetchEbayConnections();
-  }, [user, isValidUserId, normalizedUserId]);
-  const mergedInventory = useMemo(() => {
-    const rows = new Map<string, InventoryItem>();
-    const nowIso = new Date().toISOString();
-    for (const conn of ebayConnections) {
-      const selectedMeta = Array.isArray(conn.selectedListings) ? conn.selectedListings : [];
-      for (const row of selectedMeta) {
-        const id = row.id || row.listingId || row.offerId || "";
-        if (!id) continue;
-        const listingStatus = (row.status || "").toLowerCase();
-        const stockStatus: "In Stock" | "Out of Stock" =
-          listingStatus.includes("active") || listingStatus.includes("published") ? "In Stock" : "Out of Stock";
-        rows.set(id, {
-          id: `ebay-${id}`,
-          productName: row.title || id,
-          sku: row.sku || id,
-          quantity: typeof row.quantity === "number" ? row.quantity : 0,
-          dateAdded: nowIso,
-          status: stockStatus,
-          source: "ebay",
-        });
-      }
-      const list = Array.isArray(conn.selectedListingIds) ? conn.selectedListingIds : [];
-      for (const id of list) {
-        if (typeof id === "string" && id.trim() && !rows.has(id.trim())) {
-          rows.set(id.trim(), {
-            id: `ebay-${id.trim()}`,
-            productName: id.trim(),
-            sku: id.trim(),
-            quantity: 0,
-            dateAdded: nowIso,
-            status: "Out of Stock",
-            source: "ebay",
-          });
-        }
-      }
-    }
-    return [...inventory, ...Array.from(rows.values())];
-  }, [ebayConnections, inventory]);
 
   return (
     <Card className="border-2 shadow-xl overflow-hidden">
@@ -332,7 +254,7 @@ function InventoryContent() {
           <div className="space-y-6">
             <AdminInventoryManagement
               selectedUser={selectedUser}
-              inventory={mergedInventory}
+              inventory={inventory}
               shipped={shipped}
               loading={inventoryLoading}
               initialSection={section || undefined}
