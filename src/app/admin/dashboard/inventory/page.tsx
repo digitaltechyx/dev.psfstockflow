@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useState, useMemo } from "react";
+import React, { Suspense, useState, useMemo, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, Users, ChevronsUpDown } from "lucide-react";
 import { AdminInventoryManagement } from "@/components/admin/admin-inventory-management";
@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/
 import { Input } from "@/components/ui/input";
 import { hasRole } from "@/lib/permissions";
 import { clearFirestoreCache as clearCache } from "@/lib/firebase";
+import { useAuth } from "@/hooks/use-auth";
 
 function InventoryContent() {
   const router = useRouter();
@@ -109,6 +110,33 @@ function InventoryContent() {
   const { data: shipped, loading: shippedLoading, error: shippedError } = useCollection<ShippedItem>(
     isValidUserId ? `users/${normalizedUserId}/shipped` : ""
   );
+
+  const { user: authUser } = useAuth();
+  const ebayRefreshDoneForUser = useRef<string | null>(null);
+  useEffect(() => {
+    if (!authUser || !normalizedUserId || inventoryLoading || !inventory.length) return;
+    const items = inventory as (InventoryItem & { source?: string; ebayConnectionId?: string })[];
+    const connectionIds = [...new Set(
+      items.filter((i) => i.source === "ebay" && i.ebayConnectionId).map((i) => i.ebayConnectionId!)
+    )];
+    if (connectionIds.length === 0) return;
+    if (ebayRefreshDoneForUser.current === normalizedUserId) return;
+    ebayRefreshDoneForUser.current = normalizedUserId;
+    (async () => {
+      const token = await authUser.getIdToken();
+      for (const connectionId of connectionIds) {
+        try {
+          await fetch("/api/integrations/ebay/refresh-inventory", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ userId: normalizedUserId, connectionId }),
+          });
+        } catch {
+          // ignore
+        }
+      }
+    })();
+  }, [authUser, normalizedUserId, inventoryLoading, inventory]);
 
   return (
     <Card className="border-2 shadow-xl overflow-hidden">

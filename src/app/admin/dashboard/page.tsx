@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useCollection } from "@/hooks/use-collection";
 import type { UserProfile, InventoryItem, ShippedItem, Invoice } from "@/types";
 import { useAuth } from "@/hooks/use-auth";
@@ -78,6 +78,33 @@ export default function AdminDashboardPage() {
   
   const { data: inventory, loading: inventoryLoading } = useCollection<InventoryItem>(inventoryPath);
   const { data: shipped, loading: shippedLoading } = useCollection<ShippedItem>(shippedPath);
+
+  const { user: authUser } = useAuth();
+  const ebayRefreshDoneForUser = useRef<string | null>(null);
+  useEffect(() => {
+    if (!authUser || !selectedUser?.uid || inventoryLoading || !inventory.length) return;
+    const items = inventory as (InventoryItem & { source?: string; ebayConnectionId?: string })[];
+    const connectionIds = [...new Set(
+      items.filter((i) => i.source === "ebay" && i.ebayConnectionId).map((i) => i.ebayConnectionId!)
+    )];
+    if (connectionIds.length === 0) return;
+    if (ebayRefreshDoneForUser.current === selectedUser.uid) return;
+    ebayRefreshDoneForUser.current = selectedUser.uid;
+    (async () => {
+      const token = await authUser.getIdToken();
+      for (const connectionId of connectionIds) {
+        try {
+          await fetch("/api/integrations/ebay/refresh-inventory", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ userId: selectedUser.uid, connectionId }),
+          });
+        } catch {
+          // ignore
+        }
+      }
+    })();
+  }, [authUser, selectedUser?.uid, inventoryLoading, inventory]);
 
   const activeUsersCount = useMemo(() => {
     if (!users || !adminUser?.uid) return 0;

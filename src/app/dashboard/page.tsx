@@ -8,13 +8,16 @@ import { ShippedTable } from "@/components/dashboard/shipped-table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, Truck, DollarSign, AlertCircle, Mail, MessageCircle } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { hasRole } from "@/lib/permissions";
 
+type InventoryItemWithSource = InventoryItem & { source?: string; ebayConnectionId?: string };
+
 export default function DashboardPage() {
-  const { userProfile } = useAuth();
+  const { userProfile, user: authUser } = useAuth();
   const router = useRouter();
+  const ebayRefreshDone = useRef(false);
 
   // Redirect commission agents (without user role) to their affiliate dashboard
   // If user has both roles, they stay on client dashboard
@@ -44,6 +47,31 @@ export default function DashboardPage() {
   } = useCollection<Invoice>(
     userProfile ? `users/${userProfile.uid}/invoices` : ""
   );
+
+  // Refresh eBay quantities from eBay when dashboard loads (no cron; same idea as Shopify webhooks updating on change)
+  useEffect(() => {
+    if (!authUser || !userProfile || inventoryLoading || ebayRefreshDone.current) return;
+    const items = inventoryData as InventoryItemWithSource[];
+    const connectionIds = [...new Set(
+      items.filter((i) => i.source === "ebay" && i.ebayConnectionId).map((i) => i.ebayConnectionId!)
+    )];
+    if (connectionIds.length === 0) return;
+    ebayRefreshDone.current = true;
+    (async () => {
+      const token = await authUser.getIdToken();
+      for (const connectionId of connectionIds) {
+        try {
+          await fetch("/api/integrations/ebay/refresh-inventory", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ connectionId }),
+          });
+        } catch {
+          // ignore
+        }
+      }
+    })();
+  }, [authUser, userProfile, inventoryLoading, inventoryData]);
 
   // Calculate total quantity of all inventory items
   const totalItemsInInventory = useMemo(() => {
