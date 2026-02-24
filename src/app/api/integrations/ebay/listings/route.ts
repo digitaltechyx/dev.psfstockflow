@@ -37,6 +37,7 @@ async function fetchTradingActiveListings(
   while (pageNumber <= totalPages) {
     const body = `<?xml version="1.0" encoding="utf-8"?>
 <GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <DetailLevel>ReturnAll</DetailLevel>
   <ActiveList>
     <Include>true</Include>
     <Pagination>
@@ -74,12 +75,16 @@ async function fetchTradingActiveListings(
               | {
                   ItemID?: string;
                   Title?: string;
-                  SellingStatus?: { ListingStatus?: string; QuantityAvailable?: string | number };
+                  Quantity?: string | number;
+                  QuantityAvailable?: string | number;
+                  SellingStatus?: { ListingStatus?: string; QuantityAvailable?: string | number; QuantitySold?: string | number };
                 }
               | {
                   ItemID?: string;
                   Title?: string;
-                  SellingStatus?: { ListingStatus?: string; QuantityAvailable?: string | number };
+                  Quantity?: string | number;
+                  QuantityAvailable?: string | number;
+                  SellingStatus?: { ListingStatus?: string; QuantityAvailable?: string | number; QuantitySold?: string | number };
                 }[];
           };
           PaginationResult?: {
@@ -104,13 +109,34 @@ async function fetchTradingActiveListings(
     const activeList = response?.ActiveList;
     const pageItems = toArray(activeList?.ItemArray?.Item);
     for (const item of pageItems) {
-      const itemId = String(item.ItemID ?? "").trim();
+      const raw = item as Record<string, unknown>;
+      const itemId = String(item.ItemID ?? raw?.ItemID ?? raw?.itemID ?? "").trim();
       if (!itemId) continue;
+      const sellingStatus = (item.SellingStatus ?? raw?.SellingStatus ?? raw?.sellingStatus) as Record<string, unknown> | undefined;
+      const qtyAvail = Number(
+        item.QuantityAvailable ??
+        raw?.QuantityAvailable ??
+        raw?.quantityAvailable ??
+        sellingStatus?.QuantityAvailable ??
+        sellingStatus?.quantityAvailable ??
+        0
+      );
+      const qtyTotal = Number(item.Quantity ?? raw?.Quantity ?? raw?.quantity ?? 0);
+      const qtySold = Number(
+        item.SellingStatus?.QuantitySold ??
+        sellingStatus?.QuantitySold ??
+        sellingStatus?.quantitySold ??
+        0
+      );
+      const quantity =
+        qtyAvail > 0 ? qtyAvail : (qtyTotal > 0 && qtySold >= 0 ? Math.max(0, qtyTotal - qtySold) : qtyTotal > 0 ? qtyTotal : 0);
       items.push({
         itemId,
-        title: String(item.Title ?? "").trim() || `Listing ${itemId}`,
-        status: String(item.SellingStatus?.ListingStatus ?? "ACTIVE").trim(),
-        quantity: Number(item.SellingStatus?.QuantityAvailable ?? 0) || 0,
+        title: String(item.Title ?? raw?.Title ?? raw?.title ?? "").trim() || `Listing ${itemId}`,
+        status: String(
+          item.SellingStatus?.ListingStatus ?? sellingStatus?.ListingStatus ?? sellingStatus?.listingStatus ?? "ACTIVE"
+        ).trim(),
+        quantity,
       });
     }
 
