@@ -26,7 +26,7 @@ type EbayConnectionDoc = {
 };
 
 export default function DashboardPage() {
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
   const router = useRouter();
 
   // Redirect commission agents (without user role) to their affiliate dashboard
@@ -57,9 +57,31 @@ export default function DashboardPage() {
   } = useCollection<Invoice>(
     userProfile ? `users/${userProfile.uid}/invoices` : ""
   );
-  const { data: ebayConnections } = useCollection<EbayConnectionDoc>(
-    userProfile ? `users/${userProfile.uid}/ebayConnections` : ""
-  );
+  const [ebayConnections, setEbayConnections] = useState<EbayConnectionDoc[]>([]);
+
+  useEffect(() => {
+    const fetchEbayConnections = async () => {
+      if (!user) {
+        setEbayConnections([]);
+        return;
+      }
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/integrations/ebay-connections", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          setEbayConnections([]);
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        setEbayConnections(Array.isArray(data.connections) ? (data.connections as EbayConnectionDoc[]) : []);
+      } catch {
+        setEbayConnections([]);
+      }
+    };
+    fetchEbayConnections();
+  }, [user]);
 
   // Calculate total quantity of all inventory items
   const totalItemsInInventory = useMemo(() => {

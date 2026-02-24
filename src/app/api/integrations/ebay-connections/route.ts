@@ -3,6 +3,13 @@ import { adminAuth, adminDb } from "@/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
+function isAdminOrSubAdmin(data: Record<string, unknown> | undefined): boolean {
+  if (!data) return false;
+  const role = data.role as string;
+  const roles = data.roles as string[] | undefined;
+  return role === "admin" || role === "sub_admin" || (Array.isArray(roles) && (roles.includes("admin") || roles.includes("sub_admin")));
+}
+
 /** GET: list current user's eBay connection (single account for now). */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -14,13 +21,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let uid: string;
+  let callerUid: string;
+  let isAdmin = false;
   try {
     const decoded = await adminAuth().verifyIdToken(token);
-    uid = decoded.uid;
-    if (!uid) throw new Error("No uid");
+    callerUid = decoded.uid;
+    if (!callerUid) throw new Error("No uid");
+    const userDoc = await adminDb().collection("users").doc(callerUid).get();
+    isAdmin = isAdminOrSubAdmin(userDoc.data());
   } catch {
     return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
+  }
+
+  const uidParam = request.nextUrl.searchParams.get("userId")?.trim();
+  const uid = uidParam && isAdmin ? uidParam : callerUid;
+  if (uid !== callerUid && !isAdmin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
@@ -37,6 +53,7 @@ export async function GET(request: NextRequest) {
         environment: data.environment ?? "sandbox",
         selectedOfferIds: Array.isArray(data.selectedOfferIds) ? data.selectedOfferIds : [],
         selectedListingIds: Array.isArray(data.selectedListingIds) ? data.selectedListingIds : [],
+        selectedListings: Array.isArray(data.selectedListings) ? data.selectedListings : [],
       };
     });
     return NextResponse.json({ connections: list });
