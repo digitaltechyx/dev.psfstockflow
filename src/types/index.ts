@@ -55,8 +55,8 @@ export interface InventoryItem {
     nanoseconds: number;
   } | string;
   status: 'In Stock' | 'Out of Stock';
-  /** Set when item is synced from a connected Shopify store (read-only in inventory list). */
-  source?: 'shopify';
+  /** Set when item is synced from an external integration (read-only in inventory list). */
+  source?: 'shopify' | 'ebay';
   shopifyVariantId?: string;
   shopifyProductId?: string;
   /** Shopify inventory_item_id (for inventory_levels API and webhooks). */

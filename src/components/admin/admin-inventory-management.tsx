@@ -1708,7 +1708,8 @@ export function AdminInventoryManagement({
           ) : filteredInventory.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {paginatedInventory.map((item) => {
-                const isLowStock = item.quantity < 5;
+                const isEbayListing = item.source === "ebay";
+                const isLowStock = !isEbayListing && item.quantity < 5;
                 return (
                 <Card key={item.id} className={`hover:shadow-md transition-shadow flex flex-col h-full ${isLowStock ? 'border-red-500 border-2 bg-red-50 dark:bg-red-950/20' : ''}`}>
                   <CardContent className="p-4 flex flex-col flex-1">
@@ -1727,6 +1728,11 @@ export function AdminInventoryManagement({
                         <Calendar className="h-4 w-4 shrink-0" />
                         <span className="truncate">Added: {formatDate(item.dateAdded)}</span>
                       </div>
+                      {isEbayListing && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span>Source: eBay selected listing</span>
+                        </div>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-auto">
                     <Tooltip>
@@ -1734,6 +1740,7 @@ export function AdminInventoryManagement({
                         <Button
                           variant="outline"
                           size="sm"
+                          disabled={isEbayListing}
                           onClick={() => handleEditProductWithLog(item)}
                             className="w-full"
                         >
@@ -1742,7 +1749,7 @@ export function AdminInventoryManagement({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Edit product details</p>
+                        <p>{isEbayListing ? "eBay rows are read-only here" : "Edit product details"}</p>
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -1750,6 +1757,7 @@ export function AdminInventoryManagement({
                         <Button
                           variant="outline"
                           size="sm"
+                          disabled={isEbayListing}
                           onClick={() => handleRestockProduct(item)}
                             className="w-full text-green-600 hover:text-green-700"
                         >
@@ -1758,7 +1766,7 @@ export function AdminInventoryManagement({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Restock product</p>
+                        <p>{isEbayListing ? "eBay rows are read-only here" : "Restock product"}</p>
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -1766,6 +1774,7 @@ export function AdminInventoryManagement({
                         <Button 
                           variant="outline" 
                           size="sm"
+                          disabled={isEbayListing}
                           onClick={() => handleRecycleProduct(item)}
                             className="w-full text-orange-600 hover:text-orange-700"
                         >
@@ -1774,7 +1783,7 @@ export function AdminInventoryManagement({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Move to Recycle Bin</p>
+                        <p>{isEbayListing ? "eBay rows are read-only here" : "Move to Recycle Bin"}</p>
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -1782,6 +1791,7 @@ export function AdminInventoryManagement({
                         <Button
                           variant="outline" 
                           size="sm"
+                          disabled={isEbayListing}
                           onClick={() => handleDeleteProduct(item)}
                             className="w-full text-red-600 hover:text-red-700"
                         >
@@ -1790,7 +1800,7 @@ export function AdminInventoryManagement({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Permanently delete product</p>
+                        <p>{isEbayListing ? "eBay rows are read-only here" : "Permanently delete product"}</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>

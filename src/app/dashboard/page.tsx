@@ -136,36 +136,44 @@ export default function DashboardPage() {
     }).length;
   }, [shippedData, currentDate]);
 
-  const selectedEbayListings = useMemo(() => {
-    const rows = new Map<string, { id: string; title: string; sku: string; status: string; source: string }>();
+  const mergedInventoryData = useMemo(() => {
+    const rows = new Map<string, InventoryItem>();
+    const nowIso = new Date().toISOString();
     for (const conn of ebayConnections) {
       const selectedMeta = Array.isArray(conn.selectedListings) ? conn.selectedListings : [];
       for (const row of selectedMeta) {
         const id = row.id || row.listingId || row.offerId || "";
         if (!id) continue;
+        const listingStatus = (row.status || "").toLowerCase();
+        const stockStatus: "In Stock" | "Out of Stock" =
+          listingStatus.includes("active") || listingStatus.includes("published") ? "In Stock" : "Out of Stock";
         rows.set(id, {
-          id,
-          title: row.title || id,
-          sku: row.sku || "-",
-          status: row.status || "-",
-          source: row.source === "trading" ? "Seller Hub" : "Inventory API",
+          id: `ebay-${id}`,
+          productName: row.title || id,
+          sku: row.sku || id,
+          quantity: 0,
+          dateAdded: nowIso,
+          status: stockStatus,
+          source: "ebay",
         });
       }
       const list = Array.isArray(conn.selectedListingIds) ? conn.selectedListingIds : [];
       for (const id of list) {
         if (typeof id === "string" && id.trim() && !rows.has(id.trim())) {
           rows.set(id.trim(), {
-            id: id.trim(),
-            title: id.trim(),
-            sku: "-",
-            status: "-",
-            source: "eBay",
+            id: `ebay-${id.trim()}`,
+            productName: id.trim(),
+            sku: id.trim(),
+            quantity: 0,
+            dateAdded: nowIso,
+            status: "Out of Stock",
+            source: "ebay",
           });
         }
       }
     }
-    return Array.from(rows.values());
-  }, [ebayConnections]);
+    return [...inventoryData, ...Array.from(rows.values())];
+  }, [ebayConnections, inventoryData]);
 
   return (
     <div className="space-y-6">
@@ -283,25 +291,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="p-6">
-                <div className="mb-4 rounded-lg border p-3">
-                  <p className="text-sm font-medium mb-2">Selected eBay Listings</p>
-                  {selectedEbayListings.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No eBay listings selected yet.</p>
-                  ) : (
-                    <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-                      {selectedEbayListings.map((row) => (
-                        <div key={row.id} className="rounded-md border p-2">
-                          <p className="text-sm font-medium truncate">{row.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {row.sku !== "-" ? `SKU: ${row.sku} · ` : ""}
-                            {row.status} · {row.source}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <InventoryTable data={inventoryData} />
+                <InventoryTable data={mergedInventoryData} />
               </div>
             )}
           </CardContent>
