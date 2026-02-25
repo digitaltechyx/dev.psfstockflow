@@ -5,6 +5,16 @@ import { useCollection } from "@/hooks/use-collection";
 import type { InventoryItem, ShippedItem, Invoice } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Boxes,
   Clock3,
@@ -37,7 +47,16 @@ type InventoryRequestLite = {
 };
 
 type ShipmentRequestLite = {
+  id?: string;
   status?: string;
+  requestedAt?: { seconds: number; nanoseconds: number } | string;
+  date?: { seconds: number; nanoseconds: number } | string;
+  shipTo?: string;
+  shipments?: Array<{
+    productName?: string;
+    quantity?: number;
+    packOf?: number;
+  }>;
 };
 
 type InventoryItemWithSource = InventoryItem & {
@@ -68,9 +87,24 @@ function normalizeInventoryDate(value: InventoryItem["dateAdded"]): Date | null 
   return null;
 }
 
+function normalizeRequestDate(
+  value?: { seconds: number; nanoseconds: number } | string
+): Date | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof value === "object" && "seconds" in value) {
+    return new Date(value.seconds * 1000);
+  }
+  return null;
+}
+
 export default function DashboardPage() {
   const { userProfile } = useAuth();
   const router = useRouter();
+  const [trendRange, setTrendRange] = useState<7 | 14 | 30>(14);
 
   useEffect(() => {
     if (userProfile && hasRole(userProfile, "commission_agent") && !hasRole(userProfile, "user")) {
@@ -182,7 +216,7 @@ export default function DashboardPage() {
   }, [inventoryData]);
 
   const inventoryAndShipmentTrend = useMemo(() => {
-    const days = 14;
+    const days = trendRange;
     const now = new Date();
     const buckets = new Map<string, { label: string; shipped: number; added: number }>();
 
@@ -213,7 +247,7 @@ export default function DashboardPage() {
     }
 
     return Array.from(buckets.values());
-  }, [inventoryData, shippedData]);
+  }, [inventoryData, shippedData, trendRange]);
 
   const orderStatusData = useMemo(() => {
     const statusCounts = {
@@ -264,6 +298,69 @@ export default function DashboardPage() {
     ebay: { label: "eBay", color: "#22c55e" },
     manual: { label: "Manual", color: "#f59e0b" },
   } satisfies ChartConfig;
+
+  const topMovingProducts = useMemo(() => {
+    const moved = new Map<string, number>();
+
+    for (const row of shippedData) {
+      if (Array.isArray(row.items) && row.items.length > 0) {
+        for (const item of row.items) {
+          const name = item.productName || "Unknown Product";
+          const qty = Number(item.shippedQty ?? item.quantity ?? 0);
+          moved.set(name, (moved.get(name) || 0) + (Number.isFinite(qty) ? qty : 0));
+        }
+      } else if (row.productName) {
+        const qty = Number(row.shippedQty ?? 0);
+        moved.set(row.productName, (moved.get(row.productName) || 0) + (Number.isFinite(qty) ? qty : 0));
+      }
+    }
+
+    const inventoryMap = new Map(
+      inventoryData.map((inv) => [inv.productName.toLowerCase(), inv.quantity || 0])
+    );
+
+    return Array.from(moved.entries())
+      .map(([name, units]) => ({
+        name,
+        units,
+        stockLeft: inventoryMap.get(name.toLowerCase()) ?? 0,
+      }))
+      .sort((a, b) => b.units - a.units)
+      .slice(0, 8);
+  }, [shippedData, inventoryData]);
+
+  const recentOrders = useMemo(() => {
+    return shipmentRequests
+      .slice()
+      .sort((a, b) => {
+        const ad = normalizeRequestDate(a.requestedAt || a.date)?.getTime() || 0;
+        const bd = normalizeRequestDate(b.requestedAt || b.date)?.getTime() || 0;
+        return bd - ad;
+      })
+      .slice(0, 8);
+  }, [shipmentRequests]);
+
+  const recentInventoryChanges = useMemo(() => {
+    return inventoryData
+      .slice()
+      .sort((a, b) => {
+        const ad = normalizeInventoryDate(a.dateAdded)?.getTime() || 0;
+        const bd = normalizeInventoryDate(b.dateAdded)?.getTime() || 0;
+        return bd - ad;
+      })
+      .slice(0, 8);
+  }, [inventoryData]);
+
+  const recentShipments = useMemo(() => {
+    return shippedData
+      .slice()
+      .sort((a, b) => {
+        const ad = normalizeDate(a.date)?.getTime() || 0;
+        const bd = normalizeDate(b.date)?.getTime() || 0;
+        return bd - ad;
+      })
+      .slice(0, 8);
+  }, [shippedData]);
 
   return (
     <div className="space-y-6">
@@ -404,10 +501,32 @@ export default function DashboardPage() {
       <div className="grid gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2 border-2 shadow-xl">
           <CardHeader className="pb-4">
-            <CardTitle className="text-lg font-semibold text-slate-900">Inventory & Shipment Trend (14 days)</CardTitle>
-            <CardDescription>
-              Compare shipped units vs newly added inventory.
-            </CardDescription>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Inventory & Shipment Trend ({trendRange} days)
+                </CardTitle>
+                <CardDescription>
+                  Compare shipped units vs newly added inventory.
+                </CardDescription>
+              </div>
+              <div className="inline-flex rounded-md border bg-slate-50 p-1">
+                {[7, 14, 30].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setTrendRange(d as 7 | 14 | 30)}
+                    className={`rounded px-3 py-1 text-xs font-medium transition ${
+                      trendRange === d
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <ChartContainer config={trendChartConfig} className="h-[300px] w-full">
@@ -551,32 +670,167 @@ export default function DashboardPage() {
 
       <Card className="border-2 shadow-xl">
         <CardHeader>
-          <CardTitle className="text-lg font-semibold">Recent Shipped Activity</CardTitle>
+          <CardTitle className="text-lg font-semibold">Top Moving Products</CardTitle>
           <CardDescription>
-            Snapshot of your latest shipping activity.
+            Products with highest shipped volume.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {shippedLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-20 w-full" />
-            </div>
+          {shippedLoading || inventoryLoading ? (
+            <Skeleton className="h-40 w-full" />
           ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-slate-600">
-                You have <span className="font-medium text-slate-900">{shippedData.length}</span> shipped records.
-              </p>
-              <div>
-                <Link
-                  href="/dashboard/shipped-orders"
-                  className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Open Shipped Orders
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-right">Shipped Units</TableHead>
+                    <TableHead className="text-right">Stock Left</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {topMovingProducts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-slate-500">
+                        No shipped data yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    topMovingProducts.map((item) => (
+                      <TableRow key={item.name}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="text-right">{item.units}</TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant={item.stockLeft <= 10 ? "destructive" : "secondary"}>
+                            {item.stockLeft}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-2 shadow-xl">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">Recent Activity</CardTitle>
+          <CardDescription>
+            Latest records across orders, inventory changes, and shipments.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="orders" className="w-full">
+            <TabsList>
+              <TabsTrigger value="orders">Recent Orders</TabsTrigger>
+              <TabsTrigger value="inventory">Inventory Changes</TabsTrigger>
+              <TabsTrigger value="shipments">Shipments</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="orders">
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Request</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Ship To</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentOrders.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-slate-500">
+                          No recent order requests.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      recentOrders.map((order, idx) => (
+                        <TableRow key={order.id || `req-${idx}`}>
+                          <TableCell className="font-medium">{order.id || "Request"}</TableCell>
+                          <TableCell>
+                            <Badge variant={(order.status || "").toLowerCase() === "rejected" ? "destructive" : "outline"}>
+                              {(order.status || "pending").replace("_", " ")}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{order.shipTo || "N/A"}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="inventory">
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead className="text-right">Quantity</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentInventoryChanges.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-slate-500">
+                          No inventory changes yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      recentInventoryChanges.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{item.productName}</TableCell>
+                          <TableCell className="text-right">{item.quantity}</TableCell>
+                          <TableCell>
+                            <Badge variant={item.status === "Out of Stock" ? "destructive" : "secondary"}>
+                              {item.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="shipments">
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead className="text-right">Shipped Qty</TableHead>
+                      <TableHead>Destination</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentShipments.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-slate-500">
+                          No shipments yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      recentShipments.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{item.productName || "Multi-item Shipment"}</TableCell>
+                          <TableCell className="text-right">{item.shippedQty || item.totalUnits || 0}</TableCell>
+                          <TableCell>{item.shipTo || "N/A"}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>
