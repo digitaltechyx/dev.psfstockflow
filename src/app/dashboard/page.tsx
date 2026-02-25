@@ -11,6 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -26,17 +33,17 @@ import {
   Truck,
   RefreshCw,
   CheckCircle2,
-  ArrowRight,
   PlugZap,
   Bell,
   Search,
-  CalendarDays,
+  Filter,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { hasRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import {
   ChartContainer,
   ChartTooltip,
@@ -108,82 +115,17 @@ function normalizeRequestDate(
   return null;
 }
 
-function MiniSparkline({
-  points,
-  colorClass,
-}: {
-  points: number[];
-  colorClass: string;
-}) {
-  const max = Math.max(...points);
-  const min = Math.min(...points);
-  const span = Math.max(1, max - min);
-  const path = points
-    .map((p, i) => {
-      const x = (i / (points.length - 1)) * 100;
-      const y = 100 - ((p - min) / span) * 100;
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  return (
-    <svg viewBox="0 0 100 30" className="h-8 w-full">
-      <polyline
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        points={path}
-        className={colorClass}
-      />
-    </svg>
-  );
-}
-
-function kpiToneClasses(tone: "blue" | "amber" | "orange" | "green" | "purple" | "emerald") {
-  switch (tone) {
-    case "blue":
-      return {
-        card: "border-blue-200/70 bg-gradient-to-br from-blue-50 to-white",
-        icon: "bg-blue-500 text-white",
-        spark: "text-blue-500",
-      };
-    case "amber":
-      return {
-        card: "border-amber-200/70 bg-gradient-to-br from-amber-50 to-white",
-        icon: "bg-amber-500 text-white",
-        spark: "text-amber-500",
-      };
-    case "orange":
-      return {
-        card: "border-orange-200/70 bg-gradient-to-br from-orange-50 to-white",
-        icon: "bg-orange-500 text-white",
-        spark: "text-orange-500",
-      };
-    case "green":
-      return {
-        card: "border-green-200/70 bg-gradient-to-br from-green-50 to-white",
-        icon: "bg-green-500 text-white",
-        spark: "text-green-500",
-      };
-    case "purple":
-      return {
-        card: "border-purple-200/70 bg-gradient-to-br from-purple-50 to-white",
-        icon: "bg-purple-500 text-white",
-        spark: "text-purple-500",
-      };
-    default:
-      return {
-        card: "border-emerald-200/70 bg-gradient-to-br from-emerald-50 to-white",
-        icon: "bg-emerald-500 text-white",
-        spark: "text-emerald-500",
-      };
-  }
-}
-
 export default function DashboardPage() {
   const { userProfile } = useAuth();
   const router = useRouter();
   const [trendRange, setTrendRange] = useState<7 | 14 | 30>(14);
+  const [dateRangeFrom, setDateRangeFrom] = useState<Date | undefined>(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+  const [dateRangeTo, setDateRangeTo] = useState<Date | undefined>(() => new Date());
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
 
   useEffect(() => {
     if (userProfile && hasRole(userProfile, "commission_agent") && !hasRole(userProfile, "user")) {
@@ -251,14 +193,6 @@ export default function DashboardPage() {
       today.getDate()
     ).padStart(2, "0")}`;
   });
-
-  const headerDateRange = useMemo(() => {
-    const today = new Date();
-    const first = new Date(today.getFullYear(), today.getMonth(), 1);
-    const from = first.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    const to = today.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    return `${from} – ${to}`;
-  }, [currentDate]);
 
   useEffect(() => {
     const updateDate = () => {
@@ -450,509 +384,367 @@ export default function DashboardPage() {
   }, [shippedData]);
 
   const kpiCards = [
-    {
-      title: "Total Inventory Units",
-      value: String(totalItemsInInventory),
-      hint: "Total units across all products",
-      tone: "blue",
-      icon: Boxes,
-      delta: "+2.1%",
-      positive: true,
-      spark: [30, 34, 32, 38, 36, 42, 46],
-    },
-    {
-      title: "Low Stock SKUs",
-      value: String(lowStockItems.length),
-      hint: "Quantity 10 or less",
-      tone: "amber",
-      icon: AlertTriangle,
-      delta: "-3%",
-      positive: false,
-      spark: [44, 42, 40, 41, 38, 36, 34],
-    },
-    {
-      title: "Pending Fulfillment",
-      value: String(pendingFulfillmentCount),
-      hint: "Open shipment requests",
-      tone: "orange",
-      icon: Clock3,
-      delta: "-5%",
-      positive: true,
-      spark: [38, 36, 34, 33, 31, 29, 27],
-    },
-    {
-      title: "Pending Invoice Amount",
-      value: invoicesLoading ? "..." : `$${totalPendingAmount.toFixed(2)}`,
-      hint: "Open invoice balance",
-      tone: "green",
-      icon: DollarSign,
-      delta: "+8.5%",
-      positive: true,
-      spark: [26, 28, 30, 31, 35, 37, 39],
-    },
-    {
-      title: "Today Shipped",
-      value: String(todaysShippedOrders),
-      hint: "Orders shipped today",
-      tone: "purple",
-      icon: Truck,
-      delta: "+12%",
-      positive: true,
-      spark: [24, 25, 27, 30, 32, 35, 36],
-    },
-    {
-      title: "Integration Health",
-      value: shopifyConnectionsLoading || ebayConnectionsLoading ? "..." : `${integrationHealth.pct}%`,
-      hint: integrationHealth.label,
-      tone: "emerald",
-      icon: RefreshCw,
-      delta: "+1%",
-      positive: true,
-      spark: [62, 64, 65, 66, 68, 69, 70],
-    },
-  ] as const;
+    { title: "Total Inventory", value: String(totalItemsInInventory), hint: "Units across all products", icon: Boxes, iconBg: "bg-blue-500/10 text-blue-600" },
+    { title: "Low Stock SKUs", value: String(lowStockItems.length), hint: "Qty ≤ 10", icon: AlertTriangle, iconBg: "bg-amber-500/10 text-amber-600" },
+    { title: "Orders Pending", value: String(pendingFulfillmentCount), hint: "Awaiting fulfillment", icon: Clock3, iconBg: "bg-orange-500/10 text-orange-600" },
+    { title: "Pending Invoice", value: invoicesLoading ? "..." : `$${totalPendingAmount.toFixed(2)}`, hint: "Outstanding balance", icon: DollarSign, iconBg: "bg-emerald-500/10 text-emerald-600" },
+    { title: "Today Shipped", value: String(todaysShippedOrders), hint: "Shipped today", icon: Truck, iconBg: "bg-violet-500/10 text-violet-600" },
+    { title: "Integration Health", value: shopifyConnectionsLoading || ebayConnectionsLoading ? "..." : `${integrationHealth.pct}%`, hint: integrationHealth.label, icon: RefreshCw, iconBg: "bg-teal-500/10 text-teal-600" },
+  ];
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-6 rounded-2xl bg-slate-50/60 p-4 md:p-5">
-      {/* Page header - template style */}
-      <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 p-5 md:p-6">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-                Dashboard
-              </h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Operations overview and key metrics
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0">
-              <Button variant="outline" size="sm" className="h-9 gap-2 text-slate-600">
-                <CalendarDays className="h-4 w-4" />
-                {headerDateRange}
-              </Button>
-              <div className="relative w-[200px] sm:w-[220px]">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input className="h-9 pl-8" placeholder="Search..." />
-              </div>
-              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0">
-                <Bell className="h-4 w-4" />
-              </Button>
-              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-1.5">
-                <Avatar className="h-7 w-7">
-                  <AvatarFallback className="text-xs font-medium text-slate-600">
-                    {(userProfile?.name || userProfile?.email || "U").slice(0, 1).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-sm font-medium text-slate-700">
-                  {userProfile?.name || "User"}
-                </span>
-              </div>
-            </div>
+    <div className="min-h-full bg-neutral-50/80">
+      {/* Top navbar - glassmorphism, Stripe/Linear style */}
+      <header className="sticky top-0 z-10 border-b border-neutral-200/80 bg-white/80 shadow-sm backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-neutral-900 sm:text-2xl">Dashboard</h1>
+            <p className="text-sm text-neutral-500">3PL operations overview</p>
           </div>
-          {/* Quick actions - template style */}
-          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
-            <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
-              Quick actions
-            </span>
-            <Link href="/dashboard/inventory">
-              <Button variant="secondary" size="sm" className="h-8 gap-1.5">
-                <Boxes className="h-3.5 w-3.5" />
-                Manage Inventory
-              </Button>
-            </Link>
-            <Link href="/dashboard/create-shipment-with-labels">
-              <Button variant="secondary" size="sm" className="h-8 gap-1.5">
-                <Truck className="h-3.5 w-3.5" />
-                Create Shipment
-              </Button>
-            </Link>
-            <Link href="/dashboard/integrations">
-              <Button variant="secondary" size="sm" className="h-8 gap-1.5">
-                <PlugZap className="h-3.5 w-3.5" />
-                Integrations
-              </Button>
-            </Link>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <DateRangePicker
+              fromDate={dateRangeFrom}
+              toDate={dateRangeTo}
+              setFromDate={setDateRangeFrom}
+              setToDate={setDateRangeTo}
+              className="h-9 w-[240px] border-neutral-200 bg-white/90 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+            />
+            <Select value={sourceFilter} onValueChange={setSourceFilter}>
+              <SelectTrigger className="h-9 w-[140px] border-neutral-200 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                <Filter className="mr-1.5 h-4 w-4 text-neutral-400" />
+                <SelectValue placeholder="Source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All sources</SelectItem>
+                <SelectItem value="shopify">Shopify</SelectItem>
+                <SelectItem value="ebay">eBay</SelectItem>
+                <SelectItem value="manual">Manual</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="relative hidden w-[180px] sm:block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+              <Input className="h-9 border-neutral-200 bg-white/90 pl-9 text-sm placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.05)]" placeholder="Search..." />
+            </div>
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700">
+              <Bell className="h-4 w-4" />
+            </Button>
+            <div className="ml-1 flex items-center gap-2 rounded-lg border border-neutral-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+              <Avatar className="h-7 w-7">
+                <AvatarFallback className="bg-neutral-100 text-xs font-medium text-neutral-600">
+                  {(userProfile?.name || userProfile?.email || "U").slice(0, 1).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="hidden text-sm font-medium text-neutral-700 sm:inline">{userProfile?.name || "User"}</span>
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        {kpiCards.map((kpi) => {
-          const Icon = kpi.icon;
-          const tone = kpiToneClasses(kpi.tone);
-          return (
-            <Card
-              key={kpi.title}
-              className={cn(
-                "rounded-xl border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5",
-                tone.card
-              )}
-            >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-5 px-5">
-                <CardTitle className="text-sm font-medium text-slate-700">{kpi.title}</CardTitle>
-                <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shadow-sm", tone.icon)}>
-                  <Icon className="h-4 w-4" />
+      <div className="mx-auto max-w-[1600px] space-y-8 px-4 py-6 md:px-6">
+        {/* KPI cards - soft shadows, rounded-xl */}
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          {kpiCards.map((kpi) => {
+            const Icon = kpi.icon;
+            return (
+              <Card
+                key={kpi.title}
+                className="overflow-hidden rounded-xl border-neutral-200/80 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] transition-shadow hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)]"
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between">
+                    <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", kpi.iconBg)}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-2xl font-semibold tracking-tight text-neutral-900">{kpi.value}</p>
+                  <p className="mt-0.5 text-sm font-medium text-neutral-600">{kpi.title}</p>
+                  <p className="mt-1 text-xs text-neutral-500">{kpi.hint}</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </section>
+
+        {/* Analytics: Line chart + Donut */}
+        <section className="grid gap-6 xl:grid-cols-12">
+          <Card className="xl:col-span-7 overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold text-neutral-900">Inventory & Shipment Trend</CardTitle>
+                  <CardDescription className="text-neutral-500">Shipped vs added inventory over time</CardDescription>
                 </div>
-              </CardHeader>
-              <CardContent className="px-5 pb-5">
-                <div className="text-2xl font-bold tracking-tight text-slate-900">{kpi.value}</div>
-                <MiniSparkline
-                  points={kpi.spark}
-                  colorClass={kpi.positive ? tone.spark : "text-rose-500"}
-                />
-                <div className="mt-1">
-                  <Badge variant={kpi.positive ? "secondary" : "destructive"} className="text-xs">
-                    {kpi.delta}
-                  </Badge>
-                </div>
-                <p className="mt-2 text-xs text-slate-500">{kpi.hint}</p>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-12">
-        <Card className="xl:col-span-7 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <CardHeader className="pb-4 pt-6 px-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle className="text-lg font-semibold text-slate-900">
-                  Inventory & Shipment Trend ({trendRange} days)
-                </CardTitle>
-                <CardDescription className="text-slate-500">
-                  Compare shipped units vs newly added inventory.
-                </CardDescription>
-              </div>
-              <div className="inline-flex rounded-md border bg-slate-50 p-1">
-                {[7, 14, 30].map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setTrendRange(d as 7 | 14 | 30)}
-                    className={`rounded px-3 py-1 text-xs font-medium transition ${
-                      trendRange === d
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "text-slate-500 hover:text-slate-700"
-                    }`}
-                  >
-                    {d}d
-                  </button>
-                ))}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="px-6 pb-6">
-            <ChartContainer config={trendChartConfig} className="h-[300px] w-full">
-              <AreaChart data={inventoryAndShipmentTrend}>
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} />
-                <Area
-                  dataKey="added"
-                  type="monotone"
-                  fill="var(--color-added)"
-                  fillOpacity={0.25}
-                  stroke="var(--color-added)"
-                  strokeWidth={2}
-                />
-                <Area
-                  dataKey="shipped"
-                  type="monotone"
-                  fill="var(--color-shipped)"
-                  fillOpacity={0.25}
-                  stroke="var(--color-shipped)"
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-
-        <Card className="xl:col-span-3 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <CardHeader className="pb-3 pt-6 px-6">
-            <CardTitle className="text-lg font-semibold text-slate-900">Orders by Status</CardTitle>
-            <CardDescription className="text-slate-500">Live mix of shipped and request statuses.</CardDescription>
-          </CardHeader>
-          <CardContent className="px-6 pb-6">
-            <ChartContainer config={orderStatusChartConfig} className="h-[300px] w-full">
-              <PieChart>
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Pie
-                  data={orderStatusData}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={58}
-                  outerRadius={96}
-                  paddingAngle={2}
-                >
-                  {orderStatusData.map((entry) => (
-                    <Cell key={entry.name} fill={entry.fill} />
+                <div className="inline-flex rounded-lg border border-neutral-200 bg-neutral-50/80 p-1">
+                  {([7, 14, 30] as const).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setTrendRange(d)}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 text-xs font-medium transition",
+                        trendRange === d ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
+                      )}
+                    >
+                      {d}d
+                    </button>
                   ))}
-                </Pie>
-              </PieChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-        <Card className="xl:col-span-2 xl:row-span-2 rounded-xl border border-rose-200/70 bg-white shadow-sm">
-          <CardHeader className="pb-3 pt-6 px-6">
-            <CardTitle className="text-lg font-semibold text-rose-900">Alerts</CardTitle>
-            <CardDescription className="text-slate-500">Issues needing your attention.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 px-6 pb-6">
-            <div className="rounded-lg border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/60 p-3">
-              <p className="text-sm font-medium text-amber-900">Low Stock Alerts ({lowStockItems.length})</p>
-              {lowStockItems.length === 0 ? (
-                <p className="mt-1 text-xs text-amber-700">No low stock items right now.</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              <ChartContainer config={trendChartConfig} className="h-[280px] w-full">
+                <AreaChart data={inventoryAndShipmentTrend}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgb(229 231 235)" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Area dataKey="added" type="monotone" fill="var(--color-added)" fillOpacity={0.2} stroke="var(--color-added)" strokeWidth={2} />
+                  <Area dataKey="shipped" type="monotone" fill="var(--color-shipped)" fillOpacity={0.2} stroke="var(--color-shipped)" strokeWidth={2} />
+                </AreaChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="xl:col-span-3 overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <CardTitle className="text-base font-semibold text-neutral-900">Orders by Status</CardTitle>
+              <CardDescription className="text-neutral-500">Shipped, pending, processing</CardDescription>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              <ChartContainer config={orderStatusChartConfig} className="h-[280px] w-full">
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Pie data={orderStatusData} dataKey="value" nameKey="name" innerRadius={56} outerRadius={88} paddingAngle={2}>
+                    {orderStatusData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="xl:col-span-2 xl:row-span-2 flex flex-col overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <CardTitle className="text-base font-semibold text-neutral-900">Alerts</CardTitle>
+              <CardDescription className="text-neutral-500">Needs attention</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 space-y-3 px-6 pb-6">
+              <div className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-3">
+                <p className="text-sm font-medium text-amber-900">Low Stock ({lowStockItems.length})</p>
+                {lowStockItems.length === 0 ? (
+                  <p className="mt-1 text-xs text-amber-700">All good</p>
+                ) : (
+                  lowStockItems.slice(0, 3).map((item) => (
+                    <p key={item.id} className="mt-1 text-xs text-amber-800">{item.productName}: {item.quantity} left</p>
+                  ))
+                )}
+              </div>
+              <div className="rounded-lg border border-rose-200/80 bg-rose-50/60 p-3">
+                <p className="text-sm font-medium text-rose-900">Rejected Requests ({rejectedInventoryRequests.length})</p>
+                {rejectedInventoryRequests.length === 0 ? (
+                  <p className="mt-1 text-xs text-rose-700">None</p>
+                ) : (
+                  rejectedInventoryRequests.slice(0, 2).map((req, idx) => (
+                    <p key={`${req.productName}-${idx}`} className="mt-1 text-xs text-rose-800">{req.productName || "Item"}: {req.rejectionReason || "Rejected"}</p>
+                  ))
+                )}
+              </div>
+              <div className="rounded-lg border border-blue-200/80 bg-blue-50/60 p-3">
+                <p className="text-sm font-medium text-blue-900">Pending Fulfillment ({pendingFulfillmentCount})</p>
+                <p className="mt-1 text-xs text-blue-700">Shipment requests waiting</p>
+                <Link href="/dashboard/shipped-orders" className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline">Review →</Link>
+              </div>
+              <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 p-3">
+                <p className="text-sm font-medium text-emerald-900">Integrations</p>
+                <p className="mt-1 text-xs text-emerald-800">Shopify: {shopifyConnections.length > 0 ? "Connected" : "Not connected"}</p>
+                <p className="text-xs text-emerald-800">eBay: {ebayConnections.length > 0 ? "Connected" : "Not connected"}</p>
+                <Link href="/dashboard/integrations" className="mt-2 inline-block text-xs font-medium text-emerald-600 hover:underline">Settings →</Link>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Source split bar chart + Top moving products */}
+        <section className="grid gap-6 xl:grid-cols-12">
+          <Card className="xl:col-span-5 overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <CardTitle className="text-base font-semibold text-neutral-900">Source Split</CardTitle>
+              <CardDescription className="text-neutral-500">Inventory by channel</CardDescription>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              <ChartContainer config={sourceSplitChartConfig} className="h-[260px] w-full">
+                <BarChart data={sourceSplitData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgb(229 231 235)" />
+                  <XAxis dataKey="source" tickLine={false} axisLine={false} tickMargin={8} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="xl:col-span-7 overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <CardTitle className="text-base font-semibold text-neutral-900">Top Moving Products</CardTitle>
+              <CardDescription className="text-neutral-500">Highest shipped volume</CardDescription>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              {shippedLoading || inventoryLoading ? (
+                <Skeleton className="h-40 w-full rounded-lg" />
               ) : (
-                <div className="mt-2 space-y-1">
-                  {lowStockItems.slice(0, 3).map((item) => (
-                    <p key={item.id} className="text-xs text-amber-800">
-                      {item.productName}: {item.quantity} left
-                    </p>
-                  ))}
+                <div className="overflow-hidden rounded-xl border border-neutral-200/80">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-neutral-200 bg-neutral-50/80 hover:bg-neutral-50/80">
+                        <TableHead className="font-medium text-neutral-600">Product</TableHead>
+                        <TableHead className="text-right font-medium text-neutral-600">Shipped</TableHead>
+                        <TableHead className="text-right font-medium text-neutral-600">Stock</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {topMovingProducts.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="py-8 text-center text-sm text-neutral-500">No data yet</TableCell>
+                        </TableRow>
+                      ) : (
+                        topMovingProducts.map((item) => (
+                          <TableRow key={item.name} className="border-neutral-100">
+                            <TableCell className="font-medium text-neutral-900">{item.name}</TableCell>
+                            <TableCell className="text-right text-neutral-600">{item.units}</TableCell>
+                            <TableCell className="text-right">
+                              <Badge variant={item.stockLeft <= 10 ? "destructive" : "secondary"} className="font-medium">
+                                {item.stockLeft}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
-            </div>
+            </CardContent>
+          </Card>
+        </section>
 
-            <div className="rounded-lg border border-rose-200 bg-gradient-to-br from-rose-50 to-rose-100/60 p-3">
-              <p className="text-sm font-medium text-rose-900">
-                Rejected Inventory Requests ({rejectedInventoryRequests.length})
-              </p>
-              {rejectedInventoryRequests.length === 0 ? (
-                <p className="mt-1 text-xs text-rose-700">No rejected requests.</p>
-              ) : (
-                <div className="mt-2 space-y-1">
-                  {rejectedInventoryRequests.slice(0, 2).map((req, idx) => (
-                    <p key={`${req.productName || "item"}-${idx}`} className="text-xs text-rose-800">
-                      {req.productName || "Inventory item"}: {req.rejectionReason || "Rejected by admin"}
-                    </p>
-                  ))}
+        {/* Recent activity table */}
+        <Card className="overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+          <CardHeader className="pb-2 pt-6 px-6">
+            <CardTitle className="text-base font-semibold text-neutral-900">Recent Activity</CardTitle>
+            <CardDescription className="text-neutral-500">Orders, inventory changes, shipments</CardDescription>
+          </CardHeader>
+          <CardContent className="px-6 pb-6">
+            <Tabs defaultValue="orders" className="w-full">
+              <TabsList className="mb-4 inline-flex h-10 rounded-lg border border-neutral-200 bg-neutral-50/80 p-1">
+                <TabsTrigger value="orders" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-neutral-900 data-[state=active]:shadow-sm">
+                  Recent Orders
+                </TabsTrigger>
+                <TabsTrigger value="inventory" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-neutral-900 data-[state=active]:shadow-sm">
+                  Inventory
+                </TabsTrigger>
+                <TabsTrigger value="shipments" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-neutral-900 data-[state=active]:shadow-sm">
+                  Shipments
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="orders">
+                <div className="overflow-hidden rounded-xl border border-neutral-200/80">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-neutral-200 bg-neutral-50/80 hover:bg-neutral-50/80">
+                        <TableHead className="font-medium text-neutral-600">Request</TableHead>
+                        <TableHead className="font-medium text-neutral-600">Status</TableHead>
+                        <TableHead className="font-medium text-neutral-600">Ship To</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentOrders.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="py-8 text-center text-sm text-neutral-500">No recent orders</TableCell>
+                        </TableRow>
+                      ) : (
+                        recentOrders.map((order, idx) => (
+                          <TableRow key={order.id || `req-${idx}`} className="border-neutral-100">
+                            <TableCell className="font-medium text-neutral-900">{order.id || "Request"}</TableCell>
+                            <TableCell>
+                              <Badge variant={(order.status || "").toLowerCase() === "rejected" ? "destructive" : "outline"} className="font-medium">
+                                {(order.status || "pending").replace("_", " ")}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-neutral-600">{order.shipTo || "—"}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
-              )}
-            </div>
+              </TabsContent>
 
-            <div className="rounded-lg border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/60 p-3">
-              <p className="text-sm font-medium text-blue-900">Pending Fulfillment ({pendingFulfillmentCount})</p>
-              <p className="mt-1 text-xs text-blue-700">
-                Open shipment requests are waiting for processing.
-              </p>
-              <Link href="/dashboard/shipped-orders" className="mt-2 inline-block text-xs font-medium text-blue-700 underline">
-                Review shipped orders and requests
-              </Link>
-            </div>
+              <TabsContent value="inventory">
+                <div className="overflow-hidden rounded-xl border border-neutral-200/80">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-neutral-200 bg-neutral-50/80 hover:bg-neutral-50/80">
+                        <TableHead className="font-medium text-neutral-600">Product</TableHead>
+                        <TableHead className="text-right font-medium text-neutral-600">Quantity</TableHead>
+                        <TableHead className="font-medium text-neutral-600">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentInventoryChanges.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="py-8 text-center text-sm text-neutral-500">No inventory changes</TableCell>
+                        </TableRow>
+                      ) : (
+                        recentInventoryChanges.map((item) => (
+                          <TableRow key={item.id} className="border-neutral-100">
+                            <TableCell className="font-medium text-neutral-900">{item.productName}</TableCell>
+                            <TableCell className="text-right text-neutral-600">{item.quantity}</TableCell>
+                            <TableCell>
+                              <Badge variant={item.status === "Out of Stock" ? "destructive" : "secondary"} className="font-medium">{item.status}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
 
-            <div className="rounded-lg border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/60 p-3">
-              <p className="text-sm font-medium text-emerald-900">Integration Status</p>
-              <div className="mt-2 flex items-center gap-2 text-xs text-emerald-800">
-                <CheckCircle2 className="h-4 w-4" />
-                Shopify: {shopifyConnections.length > 0 ? "Connected" : "Not connected"}
-              </div>
-              <div className="mt-1 flex items-center gap-2 text-xs text-emerald-800">
-                <CheckCircle2 className="h-4 w-4" />
-                eBay: {ebayConnections.length > 0 ? "Connected" : "Not connected"}
-              </div>
-              <Link href="/dashboard/integrations" className="mt-2 inline-block text-xs font-medium text-emerald-700 underline">
-                Open integration settings
-              </Link>
-            </div>
+              <TabsContent value="shipments">
+                <div className="overflow-hidden rounded-xl border border-neutral-200/80">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-neutral-200 bg-neutral-50/80 hover:bg-neutral-50/80">
+                        <TableHead className="font-medium text-neutral-600">Product</TableHead>
+                        <TableHead className="text-right font-medium text-neutral-600">Shipped</TableHead>
+                        <TableHead className="font-medium text-neutral-600">Destination</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentShipments.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="py-8 text-center text-sm text-neutral-500">No shipments</TableCell>
+                        </TableRow>
+                      ) : (
+                        recentShipments.map((item) => (
+                          <TableRow key={item.id} className="border-neutral-100">
+                            <TableCell className="font-medium text-neutral-900">{item.productName || "Multi-item"}</TableCell>
+                            <TableCell className="text-right text-neutral-600">{item.shippedQty || item.totalUnits || 0}</TableCell>
+                            <TableCell className="text-neutral-600">{item.shipTo || "—"}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </div>
-
-      <div className="grid gap-6 xl:grid-cols-12">
-        <Card className="xl:col-span-5 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <CardHeader className="pt-6 px-6">
-            <CardTitle className="text-lg font-semibold text-slate-900">Source Split</CardTitle>
-            <CardDescription className="text-slate-500">Inventory items by source channel.</CardDescription>
-          </CardHeader>
-          <CardContent className="px-6 pb-6">
-            <ChartContainer config={sourceSplitChartConfig} className="h-[260px] w-full">
-              <BarChart data={sourceSplitData}>
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="source" tickLine={false} axisLine={false} tickMargin={8} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} />
-                <Bar dataKey="count" radius={8} />
-              </BarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-
-        <Card className="xl:col-span-7 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <CardHeader className="pt-6 px-6">
-            <CardTitle className="text-lg font-semibold text-slate-900">Top Moving Products</CardTitle>
-            <CardDescription className="text-slate-500">
-              Products with highest shipped volume.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="px-6 pb-6">
-            {shippedLoading || inventoryLoading ? (
-              <Skeleton className="h-40 w-full rounded-lg" />
-            ) : (
-              <div className="overflow-hidden rounded-lg border border-slate-200">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
-                      <TableHead className="font-semibold text-slate-700">Product</TableHead>
-                      <TableHead className="text-right font-semibold text-slate-700">Shipped Units</TableHead>
-                      <TableHead className="text-right font-semibold text-slate-700">Stock Left</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {topMovingProducts.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center text-slate-500">
-                          No shipped data yet.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      topMovingProducts.map((item) => (
-                        <TableRow key={item.name}>
-                          <TableCell className="font-medium">{item.name}</TableCell>
-                          <TableCell className="text-right">{item.units}</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant={item.stockLeft <= 10 ? "destructive" : "secondary"}>
-                              {item.stockLeft}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <CardHeader className="pt-6 px-6">
-          <CardTitle className="text-lg font-semibold text-slate-900">Recent Activity</CardTitle>
-          <CardDescription className="text-slate-500">
-            Latest records across orders, inventory changes, and shipments.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="px-6 pb-6">
-          <Tabs defaultValue="orders" className="w-full">
-            <TabsList className="mb-4 inline-flex h-10 rounded-lg bg-slate-100 p-1 text-slate-600">
-              <TabsTrigger value="orders" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
-                Recent Orders
-              </TabsTrigger>
-              <TabsTrigger value="inventory" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
-                Inventory Changes
-              </TabsTrigger>
-              <TabsTrigger value="shipments" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
-                Shipments
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="orders">
-              <div className="overflow-hidden rounded-lg border border-slate-200">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
-                      <TableHead className="font-semibold text-slate-700">Request</TableHead>
-                      <TableHead className="font-semibold text-slate-700">Status</TableHead>
-                      <TableHead className="font-semibold text-slate-700">Ship To</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {recentOrders.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center text-slate-500">
-                          No recent order requests.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      recentOrders.map((order, idx) => (
-                        <TableRow key={order.id || `req-${idx}`}>
-                          <TableCell className="font-medium">{order.id || "Request"}</TableCell>
-                          <TableCell>
-                            <Badge variant={(order.status || "").toLowerCase() === "rejected" ? "destructive" : "outline"}>
-                              {(order.status || "pending").replace("_", " ")}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{order.shipTo || "N/A"}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="inventory">
-              <div className="overflow-hidden rounded-lg border border-slate-200">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
-                      <TableHead className="font-semibold text-slate-700">Product</TableHead>
-                      <TableHead className="text-right font-semibold text-slate-700">Quantity</TableHead>
-                      <TableHead className="font-semibold text-slate-700">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {recentInventoryChanges.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center text-slate-500">
-                          No inventory changes yet.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      recentInventoryChanges.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.productName}</TableCell>
-                          <TableCell className="text-right">{item.quantity}</TableCell>
-                          <TableCell>
-                            <Badge variant={item.status === "Out of Stock" ? "destructive" : "secondary"}>
-                              {item.status}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="shipments">
-              <div className="overflow-hidden rounded-lg border border-slate-200">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
-                      <TableHead className="font-semibold text-slate-700">Product</TableHead>
-                      <TableHead className="text-right font-semibold text-slate-700">Shipped Qty</TableHead>
-                      <TableHead className="font-semibold text-slate-700">Destination</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {recentShipments.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center text-slate-500">
-                          No shipments yet.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      recentShipments.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.productName || "Multi-item Shipment"}</TableCell>
-                          <TableCell className="text-right">{item.shippedQty || item.totalUnits || 0}</TableCell>
-                          <TableCell>{item.shipTo || "N/A"}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
     </div>
   );
 }
