@@ -2,12 +2,12 @@
 
 import { useAuth } from "@/hooks/use-auth";
 import { useCollection } from "@/hooks/use-collection";
-import type { InventoryItem } from "@/types";
+import type { InventoryItem, InventoryRequest } from "@/types";
 import { InventoryTable } from "@/components/dashboard/inventory-table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Package } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { Package, PackageCheck, Clock } from "lucide-react";
+import { useEffect, useRef, useMemo } from "react";
 
 type InventoryItemWithSource = InventoryItem & { source?: string; ebayConnectionId?: string };
 
@@ -20,6 +20,27 @@ export default function InventoryPage() {
     loading: inventoryLoading,
   } = useCollection<InventoryItem>(
     userProfile ? `users/${userProfile.uid}/inventory` : ""
+  );
+
+  const { data: inventoryRequests } = useCollection<InventoryRequest>(
+    userProfile ? `users/${userProfile.uid}/inventoryRequests` : ""
+  );
+
+  const totalQuantity = useMemo(
+    () => inventoryData.reduce((sum, item) => sum + (item.quantity || 0), 0),
+    [inventoryData]
+  );
+  const inStockCount = useMemo(
+    () => inventoryData.filter((i) => i.status === "In Stock").length,
+    [inventoryData]
+  );
+  const outOfStockCount = useMemo(
+    () => inventoryData.filter((i) => i.status === "Out of Stock").length,
+    [inventoryData]
+  );
+  const pendingRequestsCount = useMemo(
+    () => inventoryRequests.filter((r) => r.status === "pending").length,
+    [inventoryRequests]
   );
 
   // Refresh eBay quantities from eBay when inventory page loads
@@ -56,6 +77,78 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6">
+      {/* Stat cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="border-2 border-blue-200/50 bg-gradient-to-br from-blue-50 to-blue-100/50 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-blue-900">Total Quantity</CardTitle>
+            <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center shadow-md">
+              <Package className="h-5 w-5 text-white" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {inventoryLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-blue-900">{totalQuantity}</div>
+                <p className="text-xs text-blue-700 mt-1">Sum of all item quantities</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="border-2 border-sky-200/50 bg-gradient-to-br from-sky-50 to-sky-100/50 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-sky-900">Products</CardTitle>
+            <div className="h-10 w-10 rounded-full bg-sky-500 flex items-center justify-center shadow-md">
+              <PackageCheck className="h-5 w-5 text-white" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {inventoryLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-sky-900">{inventoryData.length}</div>
+                <p className="text-xs text-sky-700 mt-1">Items in inventory</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="border-2 border-green-200/50 bg-gradient-to-br from-green-50 to-green-100/50 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-green-900">In Stock</CardTitle>
+            <div className="h-10 w-10 rounded-full bg-green-500 flex items-center justify-center shadow-md">
+              <PackageCheck className="h-5 w-5 text-white" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {inventoryLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-green-900">{inStockCount}</div>
+                <p className="text-xs text-green-700 mt-1">
+                  {outOfStockCount > 0 ? `${outOfStockCount} out of stock` : "All items in stock"}
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="border-2 border-amber-200/50 bg-gradient-to-br from-amber-50 to-amber-100/50 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-amber-900">Pending Requests</CardTitle>
+            <div className="h-10 w-10 rounded-full bg-amber-500 flex items-center justify-center shadow-md">
+              <Clock className="h-5 w-5 text-white" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-amber-900">{pendingRequestsCount}</div>
+            <p className="text-xs text-amber-700 mt-1">Awaiting admin approval</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card className="border-2 shadow-xl overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-blue-500 to-blue-600 text-white pb-4">
           <div className="flex items-center justify-between">

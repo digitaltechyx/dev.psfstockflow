@@ -84,6 +84,14 @@ export function DashboardSidebar() {
       requiredFeature: null as string | null,
     },
     {
+      title: "Shipped Orders",
+      url: "/dashboard/shipped-orders",
+      icon: Truck,
+      color: "text-teal-600",
+      requiredRole: "user" as const,
+      requiredFeature: null as string | null,
+    },
+    {
       title: "Create Shipment",
       url: "/dashboard/create-shipment-with-labels",
       icon: Upload,

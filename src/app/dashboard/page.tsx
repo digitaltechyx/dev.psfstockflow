@@ -3,7 +3,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useCollection } from "@/hooks/use-collection";
 import type { InventoryItem, ShippedItem, Invoice } from "@/types";
-import { ShippedTable } from "@/components/dashboard/shipped-table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, Truck, DollarSign, AlertCircle, Mail, MessageCircle } from "lucide-react";
@@ -190,40 +189,12 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-purple-900">{todaysShippedOrders}</div>
-            <p className="text-xs text-purple-700 mt-1">Orders shipped today</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Content - Single Column Layout */}
-      <div className="space-y-6">
-        {/* Shipped Orders Section */}
-        <Card className="border-2 shadow-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-purple-500 to-purple-600 text-white pb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl font-bold text-white">
-                  Order Shipped ({shippedData.length})
-                </CardTitle>
-                <CardDescription className="text-purple-100 mt-1">
-                  Track your shipped orders
-                </CardDescription>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <Truck className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {shippedLoading ? (
-              <div className="p-6 space-y-4">
-                <Skeleton className="h-64 w-full" />
-              </div>
-            ) : (
-              <div className="p-6">
-                <ShippedTable data={shippedData} inventory={inventoryData} />
-              </div>
-            )}
+            <p className="text-xs text-purple-700 mt-1">
+              Orders shipped today ·{" "}
+              <Link href="/dashboard/shipped-orders" className="underline hover:no-underline font-medium">
+                View all shipped
+              </Link>
+            </p>
           </CardContent>
         </Card>
       </div>

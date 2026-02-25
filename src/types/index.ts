@@ -65,6 +65,29 @@ export interface InventoryItem {
   sku?: string;
 }
 
+/** User request to add inventory (pending/approved/rejected). */
+export interface InventoryRequest {
+  id: string;
+  userId?: string;
+  userName?: string;
+  inventoryType: "product" | "box" | "pallet" | "container";
+  productName: string;
+  quantity: number;
+  addDate?: { seconds: number; nanoseconds: number } | string;
+  requestedAt?: { seconds: number; nanoseconds: number } | string;
+  receivingDate?: { seconds: number; nanoseconds: number } | string;
+  status: "pending" | "approved" | "rejected";
+  requestedBy?: string;
+  approvedBy?: string;
+  approvedAt?: { seconds: number; nanoseconds: number } | string;
+  rejectedBy?: string;
+  rejectedAt?: { seconds: number; nanoseconds: number } | string;
+  rejectionReason?: string;
+  remarks?: string;
+  imageUrl?: string;
+  imageUrls?: string[];
+}
+
 export interface ShipmentProductItem {
   productId?: string;
   productName: string;
