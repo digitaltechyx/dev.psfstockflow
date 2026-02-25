@@ -362,10 +362,55 @@ export default function DashboardPage() {
       .slice(0, 8);
   }, [shippedData]);
 
+  const kpiCards = [
+    {
+      title: "Total Inventory Units",
+      value: String(totalItemsInInventory),
+      hint: "Total units across all products",
+      tone: "blue",
+      icon: Boxes,
+    },
+    {
+      title: "Low Stock SKUs",
+      value: String(lowStockItems.length),
+      hint: "Quantity 10 or less",
+      tone: "amber",
+      icon: AlertTriangle,
+    },
+    {
+      title: "Pending Fulfillment",
+      value: String(pendingFulfillmentCount),
+      hint: "Open shipment requests",
+      tone: "orange",
+      icon: Clock3,
+    },
+    {
+      title: "Pending Invoice Amount",
+      value: invoicesLoading ? "..." : `$${totalPendingAmount.toFixed(2)}`,
+      hint: "Open invoice balance",
+      tone: "green",
+      icon: DollarSign,
+    },
+    {
+      title: "Today Shipped",
+      value: String(todaysShippedOrders),
+      hint: "Orders shipped today",
+      tone: "purple",
+      icon: Truck,
+    },
+    {
+      title: "Integration Health",
+      value: shopifyConnectionsLoading || ebayConnectionsLoading ? "..." : `${integrationHealth.pct}%`,
+      hint: integrationHealth.label,
+      tone: "emerald",
+      icon: RefreshCw,
+    },
+  ] as const;
+
   return (
-    <div className="space-y-6">
-      <Card className="border-2 border-slate-200/70 bg-gradient-to-r from-white to-slate-50 shadow-lg">
-        <CardContent className="p-4 sm:p-5">
+    <div className="mx-auto max-w-[1500px] space-y-6">
+      <Card className="rounded-xl border border-slate-200/80 bg-white shadow-sm">
+        <CardContent className="p-5 sm:p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-slate-900">Operations Dashboard</h2>
@@ -376,21 +421,21 @@ export default function DashboardPage() {
             <div className="flex flex-wrap gap-2">
               <Link
                 href="/dashboard/inventory"
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
               >
                 <Boxes className="h-4 w-4" />
                 Manage Inventory
               </Link>
               <Link
                 href="/dashboard/create-shipment-with-labels"
-                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 <Truck className="h-4 w-4" />
                 Create Shipment
               </Link>
               <Link
                 href="/dashboard/integrations"
-                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 <PlugZap className="h-4 w-4" />
                 Integrations
@@ -401,105 +446,46 @@ export default function DashboardPage() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        <Card className="border-2 border-blue-200/50 bg-gradient-to-br from-blue-50 to-blue-100/50 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-900">Total Inventory Units</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center shadow-md">
-              <Boxes className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-900">{totalItemsInInventory}</div>
-            <p className="text-xs text-blue-700 mt-1">Total units across all products</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 border-amber-200/50 bg-gradient-to-br from-amber-50 to-amber-100/50 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-amber-900">Low Stock SKUs</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-amber-500 flex items-center justify-center shadow-md">
-              <AlertTriangle className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {inventoryLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <div className="text-3xl font-bold text-amber-900">{lowStockItems.length}</div>
-                <p className="text-xs text-amber-700 mt-1">Quantity 10 or less</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 border-orange-200/50 bg-gradient-to-br from-orange-50 to-orange-100/50 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-orange-900">Pending Fulfillment</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center shadow-md">
-              <Clock3 className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-orange-900">{pendingFulfillmentCount}</div>
-            <p className="text-xs text-orange-700 mt-1">Open shipment requests</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 border-green-200/50 bg-gradient-to-br from-green-50 to-green-100/50 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-900">Pending Invoice Amount</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-green-500 flex items-center justify-center shadow-md">
-              <DollarSign className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {invoicesLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <div className="text-3xl font-bold text-green-900">${totalPendingAmount.toFixed(2)}</div>
-                <p className="text-xs text-green-700 mt-1">Open invoice balance</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 border-purple-200/50 bg-gradient-to-br from-purple-50 to-purple-100/50 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-purple-900">Today Shipped</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-purple-500 flex items-center justify-center shadow-md">
-              <Truck className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-purple-900">{todaysShippedOrders}</div>
-            <p className="text-xs text-purple-700 mt-1">Orders shipped today</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 border-emerald-200/50 bg-gradient-to-br from-emerald-50 to-emerald-100/50 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-emerald-900">Integration Health</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-emerald-500 flex items-center justify-center shadow-md">
-              <RefreshCw className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {(shopifyConnectionsLoading || ebayConnectionsLoading) ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <div className="text-3xl font-bold text-emerald-900">{integrationHealth.pct}%</div>
-                <p className="text-xs text-emerald-700 mt-1">{integrationHealth.label}</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {kpiCards.map((kpi) => {
+          const Icon = kpi.icon;
+          return (
+            <Card key={kpi.title} className="rounded-xl border border-slate-200/90 bg-white shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-700">{kpi.title}</CardTitle>
+                <div className="h-9 w-9 rounded-lg bg-slate-100 flex items-center justify-center">
+                  <Icon className="h-4 w-4 text-slate-700" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-semibold text-slate-900">{kpi.value}</div>
+                <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-slate-400/70"
+                    style={{
+                      width:
+                        kpi.tone === "blue"
+                          ? "84%"
+                          : kpi.tone === "amber"
+                          ? "38%"
+                          : kpi.tone === "orange"
+                          ? "52%"
+                          : kpi.tone === "green"
+                          ? "68%"
+                          : kpi.tone === "purple"
+                          ? "57%"
+                          : "74%",
+                    }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">{kpi.hint}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <Card className="xl:col-span-2 border-2 shadow-xl">
+      <div className="grid gap-6 xl:grid-cols-12">
+        <Card className="xl:col-span-7 rounded-xl border border-slate-200 shadow-sm">
           <CardHeader className="pb-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -556,7 +542,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-2 shadow-xl">
+        <Card className="xl:col-span-3 rounded-xl border border-slate-200 shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-semibold text-slate-900">Orders by Status</CardTitle>
             <CardDescription>Live mix of shipped and request statuses.</CardDescription>
@@ -581,28 +567,7 @@ export default function DashboardPage() {
             </ChartContainer>
           </CardContent>
         </Card>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-3">
-        <Card className="xl:col-span-2 border-2 shadow-xl">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-slate-900">Source Split</CardTitle>
-            <CardDescription>Inventory items by source channel.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={sourceSplitChartConfig} className="h-[260px] w-full">
-              <BarChart data={sourceSplitData}>
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="source" tickLine={false} axisLine={false} tickMargin={8} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} />
-                <Bar dataKey="count" radius={8} />
-              </BarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 border-rose-200/70 shadow-xl">
+        <Card className="xl:col-span-2 xl:row-span-2 rounded-xl border border-rose-200/70 shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-semibold text-rose-900">Alerts</CardTitle>
             <CardDescription>Issues needing your attention.</CardDescription>
@@ -668,54 +633,74 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <Card className="border-2 shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold">Top Moving Products</CardTitle>
-          <CardDescription>
-            Products with highest shipped volume.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {shippedLoading || inventoryLoading ? (
-            <Skeleton className="h-40 w-full" />
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead className="text-right">Shipped Units</TableHead>
-                    <TableHead className="text-right">Stock Left</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topMovingProducts.length === 0 ? (
+      <div className="grid gap-6 xl:grid-cols-12">
+        <Card className="xl:col-span-5 rounded-xl border border-slate-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-slate-900">Source Split</CardTitle>
+            <CardDescription>Inventory items by source channel.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={sourceSplitChartConfig} className="h-[260px] w-full">
+              <BarChart data={sourceSplitData}>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="source" tickLine={false} axisLine={false} tickMargin={8} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Bar dataKey="count" radius={8} />
+              </BarChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="xl:col-span-7 rounded-xl border border-slate-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold">Top Moving Products</CardTitle>
+            <CardDescription>
+              Products with highest shipped volume.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {shippedLoading || inventoryLoading ? (
+              <Skeleton className="h-40 w-full" />
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-slate-500">
-                        No shipped data yet.
-                      </TableCell>
+                      <TableHead>Product</TableHead>
+                      <TableHead className="text-right">Shipped Units</TableHead>
+                      <TableHead className="text-right">Stock Left</TableHead>
                     </TableRow>
-                  ) : (
-                    topMovingProducts.map((item) => (
-                      <TableRow key={item.name}>
-                        <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell className="text-right">{item.units}</TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant={item.stockLeft <= 10 ? "destructive" : "secondary"}>
-                            {item.stockLeft}
-                          </Badge>
+                  </TableHeader>
+                  <TableBody>
+                    {topMovingProducts.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-slate-500">
+                          No shipped data yet.
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    ) : (
+                      topMovingProducts.map((item) => (
+                        <TableRow key={item.name}>
+                          <TableCell className="font-medium">{item.name}</TableCell>
+                          <TableCell className="text-right">{item.units}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant={item.stockLeft <= 10 ? "destructive" : "secondary"}>
+                              {item.stockLeft}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-      <Card className="border-2 shadow-xl">
+      <Card className="rounded-xl border border-slate-200 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg font-semibold">Recent Activity</CardTitle>
           <CardDescription>
