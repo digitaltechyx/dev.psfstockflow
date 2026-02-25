@@ -36,6 +36,7 @@ import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { hasRole } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 import {
   ChartContainer,
   ChartTooltip,
@@ -138,6 +139,47 @@ function MiniSparkline({
   );
 }
 
+function kpiToneClasses(tone: "blue" | "amber" | "orange" | "green" | "purple" | "emerald") {
+  switch (tone) {
+    case "blue":
+      return {
+        card: "border-blue-200/70 bg-gradient-to-br from-blue-50 to-white",
+        icon: "bg-blue-500 text-white",
+        spark: "text-blue-500",
+      };
+    case "amber":
+      return {
+        card: "border-amber-200/70 bg-gradient-to-br from-amber-50 to-white",
+        icon: "bg-amber-500 text-white",
+        spark: "text-amber-500",
+      };
+    case "orange":
+      return {
+        card: "border-orange-200/70 bg-gradient-to-br from-orange-50 to-white",
+        icon: "bg-orange-500 text-white",
+        spark: "text-orange-500",
+      };
+    case "green":
+      return {
+        card: "border-green-200/70 bg-gradient-to-br from-green-50 to-white",
+        icon: "bg-green-500 text-white",
+        spark: "text-green-500",
+      };
+    case "purple":
+      return {
+        card: "border-purple-200/70 bg-gradient-to-br from-purple-50 to-white",
+        icon: "bg-purple-500 text-white",
+        spark: "text-purple-500",
+      };
+    default:
+      return {
+        card: "border-emerald-200/70 bg-gradient-to-br from-emerald-50 to-white",
+        icon: "bg-emerald-500 text-white",
+        spark: "text-emerald-500",
+      };
+  }
+}
+
 export default function DashboardPage() {
   const { userProfile } = useAuth();
   const router = useRouter();
@@ -209,6 +251,14 @@ export default function DashboardPage() {
       today.getDate()
     ).padStart(2, "0")}`;
   });
+
+  const headerDateRange = useMemo(() => {
+    const today = new Date();
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    const from = first.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const to = today.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return `${from} – ${to}`;
+  }, [currentDate]);
 
   useEffect(() => {
     const updateDate = () => {
@@ -463,34 +513,66 @@ export default function DashboardPage() {
   ] as const;
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-6">
-      <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold text-slate-900">Dashboard</h2>
+    <div className="mx-auto max-w-[1500px] space-y-6 rounded-2xl bg-slate-50/60 p-4 md:p-5">
+      {/* Page header - template style */}
+      <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 p-5 md:p-6">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+                Dashboard
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Operations overview and key metrics
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0">
+              <Button variant="outline" size="sm" className="h-9 gap-2 text-slate-600">
+                <CalendarDays className="h-4 w-4" />
+                {headerDateRange}
+              </Button>
+              <div className="relative w-[200px] sm:w-[220px]">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input className="h-9 pl-8" placeholder="Search..." />
+              </div>
+              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0">
+                <Bell className="h-4 w-4" />
+              </Button>
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-1.5">
+                <Avatar className="h-7 w-7">
+                  <AvatarFallback className="text-xs font-medium text-slate-600">
+                    {(userProfile?.name || userProfile?.email || "U").slice(0, 1).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-medium text-slate-700">
+                  {userProfile?.name || "User"}
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="h-9 gap-2">
-              <CalendarDays className="h-4 w-4" />
-              Oct 1, 2023 - Oct 31, 2023
-            </Button>
-            <div className="relative w-[220px]">
-              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-              <Input className="h-9 pl-8" placeholder="Search PSF StockFlow..." />
-            </div>
-            <Button variant="outline" size="icon" className="h-9 w-9">
-              <Bell className="h-4 w-4" />
-            </Button>
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5">
-              <Avatar className="h-7 w-7">
-                <AvatarFallback>
-                  {(userProfile?.name || userProfile?.email || "U").slice(0, 1).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-sm font-medium text-slate-700">
-                {userProfile?.name || "User"}
-              </span>
-            </div>
+          {/* Quick actions - template style */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
+              Quick actions
+            </span>
+            <Link href="/dashboard/inventory">
+              <Button variant="secondary" size="sm" className="h-8 gap-1.5">
+                <Boxes className="h-3.5 w-3.5" />
+                Manage Inventory
+              </Button>
+            </Link>
+            <Link href="/dashboard/create-shipment-with-labels">
+              <Button variant="secondary" size="sm" className="h-8 gap-1.5">
+                <Truck className="h-3.5 w-3.5" />
+                Create Shipment
+              </Button>
+            </Link>
+            <Link href="/dashboard/integrations">
+              <Button variant="secondary" size="sm" className="h-8 gap-1.5">
+                <PlugZap className="h-3.5 w-3.5" />
+                Integrations
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
@@ -498,24 +580,29 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {kpiCards.map((kpi) => {
           const Icon = kpi.icon;
+          const tone = kpiToneClasses(kpi.tone);
           return (
-            <Card key={kpi.title} className="rounded-xl border border-slate-200/90 bg-white shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <Card
+              key={kpi.title}
+              className={cn(
+                "rounded-xl border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5",
+                tone.card
+              )}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-5 px-5">
                 <CardTitle className="text-sm font-medium text-slate-700">{kpi.title}</CardTitle>
-                <div className="h-9 w-9 rounded-lg bg-slate-100 flex items-center justify-center">
-                  <Icon className="h-4 w-4 text-slate-700" />
+                <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shadow-sm", tone.icon)}>
+                  <Icon className="h-4 w-4" />
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold text-slate-900">{kpi.value}</div>
+              <CardContent className="px-5 pb-5">
+                <div className="text-2xl font-bold tracking-tight text-slate-900">{kpi.value}</div>
                 <MiniSparkline
                   points={kpi.spark}
-                  colorClass={
-                    kpi.positive ? "text-emerald-500" : "text-rose-500"
-                  }
+                  colorClass={kpi.positive ? tone.spark : "text-rose-500"}
                 />
                 <div className="mt-1">
-                  <Badge variant={kpi.positive ? "secondary" : "destructive"}>
+                  <Badge variant={kpi.positive ? "secondary" : "destructive"} className="text-xs">
                     {kpi.delta}
                   </Badge>
                 </div>
@@ -527,14 +614,14 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-12">
-        <Card className="xl:col-span-7 rounded-xl border border-slate-200 shadow-sm">
-          <CardHeader className="pb-4">
+        <Card className="xl:col-span-7 rounded-xl border border-slate-200 bg-white shadow-sm">
+          <CardHeader className="pb-4 pt-6 px-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="text-lg font-semibold text-slate-900">
                   Inventory & Shipment Trend ({trendRange} days)
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-slate-500">
                   Compare shipped units vs newly added inventory.
                 </CardDescription>
               </div>
@@ -556,7 +643,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-6 pb-6">
             <ChartContainer config={trendChartConfig} className="h-[300px] w-full">
               <AreaChart data={inventoryAndShipmentTrend}>
                 <CartesianGrid vertical={false} />
@@ -584,12 +671,12 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="xl:col-span-3 rounded-xl border border-slate-200 shadow-sm">
-          <CardHeader className="pb-3">
+        <Card className="xl:col-span-3 rounded-xl border border-slate-200 bg-white shadow-sm">
+          <CardHeader className="pb-3 pt-6 px-6">
             <CardTitle className="text-lg font-semibold text-slate-900">Orders by Status</CardTitle>
-            <CardDescription>Live mix of shipped and request statuses.</CardDescription>
+            <CardDescription className="text-slate-500">Live mix of shipped and request statuses.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-6 pb-6">
             <ChartContainer config={orderStatusChartConfig} className="h-[300px] w-full">
               <PieChart>
                 <ChartTooltip content={<ChartTooltipContent />} />
@@ -609,13 +696,13 @@ export default function DashboardPage() {
             </ChartContainer>
           </CardContent>
         </Card>
-        <Card className="xl:col-span-2 xl:row-span-2 rounded-xl border border-rose-200/70 shadow-sm">
-          <CardHeader className="pb-3">
+        <Card className="xl:col-span-2 xl:row-span-2 rounded-xl border border-rose-200/70 bg-white shadow-sm">
+          <CardHeader className="pb-3 pt-6 px-6">
             <CardTitle className="text-lg font-semibold text-rose-900">Alerts</CardTitle>
-            <CardDescription>Issues needing your attention.</CardDescription>
+            <CardDescription className="text-slate-500">Issues needing your attention.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+          <CardContent className="space-y-3 px-6 pb-6">
+            <div className="rounded-lg border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/60 p-3">
               <p className="text-sm font-medium text-amber-900">Low Stock Alerts ({lowStockItems.length})</p>
               {lowStockItems.length === 0 ? (
                 <p className="mt-1 text-xs text-amber-700">No low stock items right now.</p>
@@ -630,7 +717,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3">
+            <div className="rounded-lg border border-rose-200 bg-gradient-to-br from-rose-50 to-rose-100/60 p-3">
               <p className="text-sm font-medium text-rose-900">
                 Rejected Inventory Requests ({rejectedInventoryRequests.length})
               </p>
@@ -647,7 +734,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+            <div className="rounded-lg border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/60 p-3">
               <p className="text-sm font-medium text-blue-900">Pending Fulfillment ({pendingFulfillmentCount})</p>
               <p className="mt-1 text-xs text-blue-700">
                 Open shipment requests are waiting for processing.
@@ -657,7 +744,7 @@ export default function DashboardPage() {
               </Link>
             </div>
 
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+            <div className="rounded-lg border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/60 p-3">
               <p className="text-sm font-medium text-emerald-900">Integration Status</p>
               <div className="mt-2 flex items-center gap-2 text-xs text-emerald-800">
                 <CheckCircle2 className="h-4 w-4" />
@@ -676,12 +763,12 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-12">
-        <Card className="xl:col-span-5 rounded-xl border border-slate-200 shadow-sm">
-          <CardHeader>
+        <Card className="xl:col-span-5 rounded-xl border border-slate-200 bg-white shadow-sm">
+          <CardHeader className="pt-6 px-6">
             <CardTitle className="text-lg font-semibold text-slate-900">Source Split</CardTitle>
-            <CardDescription>Inventory items by source channel.</CardDescription>
+            <CardDescription className="text-slate-500">Inventory items by source channel.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-6 pb-6">
             <ChartContainer config={sourceSplitChartConfig} className="h-[260px] w-full">
               <BarChart data={sourceSplitData}>
                 <CartesianGrid vertical={false} />
@@ -694,24 +781,24 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="xl:col-span-7 rounded-xl border border-slate-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold">Top Moving Products</CardTitle>
-            <CardDescription>
+        <Card className="xl:col-span-7 rounded-xl border border-slate-200 bg-white shadow-sm">
+          <CardHeader className="pt-6 px-6">
+            <CardTitle className="text-lg font-semibold text-slate-900">Top Moving Products</CardTitle>
+            <CardDescription className="text-slate-500">
               Products with highest shipped volume.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-6 pb-6">
             {shippedLoading || inventoryLoading ? (
-              <Skeleton className="h-40 w-full" />
+              <Skeleton className="h-40 w-full rounded-lg" />
             ) : (
-              <div className="rounded-md border">
+              <div className="overflow-hidden rounded-lg border border-slate-200">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Shipped Units</TableHead>
-                      <TableHead className="text-right">Stock Left</TableHead>
+                    <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
+                      <TableHead className="font-semibold text-slate-700">Product</TableHead>
+                      <TableHead className="text-right font-semibold text-slate-700">Shipped Units</TableHead>
+                      <TableHead className="text-right font-semibold text-slate-700">Stock Left</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -742,29 +829,35 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <Card className="rounded-xl border border-slate-200 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold">Recent Activity</CardTitle>
-          <CardDescription>
+      <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <CardHeader className="pt-6 px-6">
+          <CardTitle className="text-lg font-semibold text-slate-900">Recent Activity</CardTitle>
+          <CardDescription className="text-slate-500">
             Latest records across orders, inventory changes, and shipments.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-6 pb-6">
           <Tabs defaultValue="orders" className="w-full">
-            <TabsList>
-              <TabsTrigger value="orders">Recent Orders</TabsTrigger>
-              <TabsTrigger value="inventory">Inventory Changes</TabsTrigger>
-              <TabsTrigger value="shipments">Shipments</TabsTrigger>
+            <TabsList className="mb-4 inline-flex h-10 rounded-lg bg-slate-100 p-1 text-slate-600">
+              <TabsTrigger value="orders" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
+                Recent Orders
+              </TabsTrigger>
+              <TabsTrigger value="inventory" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
+                Inventory Changes
+              </TabsTrigger>
+              <TabsTrigger value="shipments" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
+                Shipments
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="orders">
-              <div className="rounded-md border">
+              <div className="overflow-hidden rounded-lg border border-slate-200">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Request</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Ship To</TableHead>
+                    <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
+                      <TableHead className="font-semibold text-slate-700">Request</TableHead>
+                      <TableHead className="font-semibold text-slate-700">Status</TableHead>
+                      <TableHead className="font-semibold text-slate-700">Ship To</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -793,13 +886,13 @@ export default function DashboardPage() {
             </TabsContent>
 
             <TabsContent value="inventory">
-              <div className="rounded-md border">
+              <div className="overflow-hidden rounded-lg border border-slate-200">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Quantity</TableHead>
-                      <TableHead>Status</TableHead>
+                    <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
+                      <TableHead className="font-semibold text-slate-700">Product</TableHead>
+                      <TableHead className="text-right font-semibold text-slate-700">Quantity</TableHead>
+                      <TableHead className="font-semibold text-slate-700">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -828,13 +921,13 @@ export default function DashboardPage() {
             </TabsContent>
 
             <TabsContent value="shipments">
-              <div className="rounded-md border">
+              <div className="overflow-hidden rounded-lg border border-slate-200">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Shipped Qty</TableHead>
-                      <TableHead>Destination</TableHead>
+                    <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
+                      <TableHead className="font-semibold text-slate-700">Product</TableHead>
+                      <TableHead className="text-right font-semibold text-slate-700">Shipped Qty</TableHead>
+                      <TableHead className="font-semibold text-slate-700">Destination</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
