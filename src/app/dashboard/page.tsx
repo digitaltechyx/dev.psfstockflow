@@ -5,7 +5,10 @@ import { useCollection } from "@/hooks/use-collection";
 import type { InventoryItem, ShippedItem, Invoice } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -25,6 +28,9 @@ import {
   CheckCircle2,
   ArrowRight,
   PlugZap,
+  Bell,
+  Search,
+  CalendarDays,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
@@ -99,6 +105,37 @@ function normalizeRequestDate(
     return new Date(value.seconds * 1000);
   }
   return null;
+}
+
+function MiniSparkline({
+  points,
+  colorClass,
+}: {
+  points: number[];
+  colorClass: string;
+}) {
+  const max = Math.max(...points);
+  const min = Math.min(...points);
+  const span = Math.max(1, max - min);
+  const path = points
+    .map((p, i) => {
+      const x = (i / (points.length - 1)) * 100;
+      const y = 100 - ((p - min) / span) * 100;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <svg viewBox="0 0 100 30" className="h-8 w-full">
+      <polyline
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        points={path}
+        className={colorClass}
+      />
+    </svg>
+  );
 }
 
 export default function DashboardPage() {
@@ -369,6 +406,9 @@ export default function DashboardPage() {
       hint: "Total units across all products",
       tone: "blue",
       icon: Boxes,
+      delta: "+2.1%",
+      positive: true,
+      spark: [30, 34, 32, 38, 36, 42, 46],
     },
     {
       title: "Low Stock SKUs",
@@ -376,6 +416,9 @@ export default function DashboardPage() {
       hint: "Quantity 10 or less",
       tone: "amber",
       icon: AlertTriangle,
+      delta: "-3%",
+      positive: false,
+      spark: [44, 42, 40, 41, 38, 36, 34],
     },
     {
       title: "Pending Fulfillment",
@@ -383,6 +426,9 @@ export default function DashboardPage() {
       hint: "Open shipment requests",
       tone: "orange",
       icon: Clock3,
+      delta: "-5%",
+      positive: true,
+      spark: [38, 36, 34, 33, 31, 29, 27],
     },
     {
       title: "Pending Invoice Amount",
@@ -390,6 +436,9 @@ export default function DashboardPage() {
       hint: "Open invoice balance",
       tone: "green",
       icon: DollarSign,
+      delta: "+8.5%",
+      positive: true,
+      spark: [26, 28, 30, 31, 35, 37, 39],
     },
     {
       title: "Today Shipped",
@@ -397,6 +446,9 @@ export default function DashboardPage() {
       hint: "Orders shipped today",
       tone: "purple",
       icon: Truck,
+      delta: "+12%",
+      positive: true,
+      spark: [24, 25, 27, 30, 32, 35, 36],
     },
     {
       title: "Integration Health",
@@ -404,46 +456,44 @@ export default function DashboardPage() {
       hint: integrationHealth.label,
       tone: "emerald",
       icon: RefreshCw,
+      delta: "+1%",
+      positive: true,
+      spark: [62, 64, 65, 66, 68, 69, 70],
     },
   ] as const;
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-6">
-      <Card className="rounded-xl border border-slate-200/80 bg-white shadow-sm">
-        <CardContent className="p-5 sm:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-slate-900">Operations Dashboard</h2>
-              <p className="text-sm text-slate-600">
-                Live overview of inventory, fulfillment activity, invoicing, and integrations.
-              </p>
+      <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold text-slate-900">Dashboard</h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" className="h-9 gap-2">
+              <CalendarDays className="h-4 w-4" />
+              Oct 1, 2023 - Oct 31, 2023
+            </Button>
+            <div className="relative w-[220px]">
+              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+              <Input className="h-9 pl-8" placeholder="Search PSF StockFlow..." />
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href="/dashboard/inventory"
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-              >
-                <Boxes className="h-4 w-4" />
-                Manage Inventory
-              </Link>
-              <Link
-                href="/dashboard/create-shipment-with-labels"
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-              >
-                <Truck className="h-4 w-4" />
-                Create Shipment
-              </Link>
-              <Link
-                href="/dashboard/integrations"
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-              >
-                <PlugZap className="h-4 w-4" />
-                Integrations
-              </Link>
+            <Button variant="outline" size="icon" className="h-9 w-9">
+              <Bell className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5">
+              <Avatar className="h-7 w-7">
+                <AvatarFallback>
+                  {(userProfile?.name || userProfile?.email || "U").slice(0, 1).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-sm font-medium text-slate-700">
+                {userProfile?.name || "User"}
+              </span>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {kpiCards.map((kpi) => {
@@ -458,24 +508,16 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-semibold text-slate-900">{kpi.value}</div>
-                <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-slate-400/70"
-                    style={{
-                      width:
-                        kpi.tone === "blue"
-                          ? "84%"
-                          : kpi.tone === "amber"
-                          ? "38%"
-                          : kpi.tone === "orange"
-                          ? "52%"
-                          : kpi.tone === "green"
-                          ? "68%"
-                          : kpi.tone === "purple"
-                          ? "57%"
-                          : "74%",
-                    }}
-                  />
+                <MiniSparkline
+                  points={kpi.spark}
+                  colorClass={
+                    kpi.positive ? "text-emerald-500" : "text-rose-500"
+                  }
+                />
+                <div className="mt-1">
+                  <Badge variant={kpi.positive ? "secondary" : "destructive"}>
+                    {kpi.delta}
+                  </Badge>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">{kpi.hint}</p>
               </CardContent>
