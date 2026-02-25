@@ -3,21 +3,18 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useCollection } from "@/hooks/use-collection";
 import type { InventoryItem, ShippedItem, Invoice } from "@/types";
-import { InventoryTable } from "@/components/dashboard/inventory-table";
 import { ShippedTable } from "@/components/dashboard/shipped-table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, Truck, DollarSign, AlertCircle, Mail, MessageCircle } from "lucide-react";
-import { useMemo, useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { hasRole } from "@/lib/permissions";
 
-type InventoryItemWithSource = InventoryItem & { source?: string; ebayConnectionId?: string };
-
 export default function DashboardPage() {
-  const { userProfile, user: authUser } = useAuth();
+  const { userProfile } = useAuth();
   const router = useRouter();
-  const ebayRefreshDone = useRef(false);
 
   // Redirect commission agents (without user role) to their affiliate dashboard
   // If user has both roles, they stay on client dashboard
@@ -47,31 +44,6 @@ export default function DashboardPage() {
   } = useCollection<Invoice>(
     userProfile ? `users/${userProfile.uid}/invoices` : ""
   );
-
-  // Refresh eBay quantities from eBay when dashboard loads (no cron; same idea as Shopify webhooks updating on change)
-  useEffect(() => {
-    if (!authUser || !userProfile || inventoryLoading || ebayRefreshDone.current) return;
-    const items = inventoryData as InventoryItemWithSource[];
-    const connectionIds = [...new Set(
-      items.filter((i) => i.source === "ebay" && i.ebayConnectionId).map((i) => i.ebayConnectionId!)
-    )];
-    if (connectionIds.length === 0) return;
-    ebayRefreshDone.current = true;
-    (async () => {
-      const token = await authUser.getIdToken();
-      for (const connectionId of connectionIds) {
-        try {
-          await fetch("/api/integrations/ebay/refresh-inventory", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ connectionId }),
-          });
-        } catch {
-          // ignore
-        }
-      }
-    })();
-  }, [authUser, userProfile, inventoryLoading, inventoryData]);
 
   // Calculate total quantity of all inventory items
   const totalItemsInInventory = useMemo(() => {
@@ -181,7 +153,12 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-900">{totalItemsInInventory}</div>
-            <p className="text-xs text-blue-700 mt-1">Total quantity of all items</p>
+            <p className="text-xs text-blue-700 mt-1">
+              Total quantity of all items ·{" "}
+              <Link href="/dashboard/inventory" className="underline hover:no-underline font-medium">
+                Manage inventory
+              </Link>
+            </p>
           </CardContent>
         </Card>
 
@@ -220,35 +197,7 @@ export default function DashboardPage() {
 
       {/* Main Content - Single Column Layout */}
       <div className="space-y-6">
-        {/* Inventory Section - First Row */}
-        <Card className="border-2 shadow-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-blue-500 to-blue-600 text-white pb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl font-bold text-white">Inventory</CardTitle>
-                <CardDescription className="text-blue-100 mt-1">
-                  Manage your product inventory
-                </CardDescription>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <Package className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {inventoryLoading ? (
-              <div className="p-6 space-y-4">
-                <Skeleton className="h-64 w-full" />
-              </div>
-            ) : (
-              <div className="p-6">
-                <InventoryTable data={inventoryData} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Shipped Orders Section - Second Row */}
+        {/* Shipped Orders Section */}
         <Card className="border-2 shadow-xl overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-purple-500 to-purple-600 text-white pb-4">
             <div className="flex items-center justify-between">
