@@ -20,6 +20,15 @@ import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { hasRole } from "@/lib/permissions";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { Area, AreaChart, Bar, BarChart, Pie, PieChart, CartesianGrid, XAxis, Cell } from "recharts";
 
 type InventoryRequestLite = {
   status?: string;
@@ -36,6 +45,18 @@ type InventoryItemWithSource = InventoryItem & {
 };
 
 function normalizeDate(value: ShippedItem["date"]): Date | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof value === "object" && "seconds" in value) {
+    return new Date(value.seconds * 1000);
+  }
+  return null;
+}
+
+function normalizeInventoryDate(value: InventoryItem["dateAdded"]): Date | null {
   if (!value) return null;
   if (typeof value === "string") {
     const d = new Date(value);
@@ -159,6 +180,90 @@ export default function DashboardPage() {
     const manual = rows.length - shopify - ebay;
     return { shopify, ebay, manual };
   }, [inventoryData]);
+
+  const inventoryAndShipmentTrend = useMemo(() => {
+    const days = 14;
+    const now = new Date();
+    const buckets = new Map<string, { label: string; shipped: number; added: number }>();
+
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      buckets.set(key, { label, shipped: 0, added: 0 });
+    }
+
+    for (const row of shippedData) {
+      const d = normalizeDate(row.date);
+      if (!d) continue;
+      const key = d.toISOString().slice(0, 10);
+      if (!buckets.has(key)) continue;
+      const qty = Number(row.shippedQty ?? 0);
+      buckets.get(key)!.shipped += Number.isFinite(qty) ? qty : 0;
+    }
+
+    for (const row of inventoryData) {
+      const d = normalizeInventoryDate(row.dateAdded);
+      if (!d) continue;
+      const key = d.toISOString().slice(0, 10);
+      if (!buckets.has(key)) continue;
+      const qty = Number(row.quantity ?? 0);
+      buckets.get(key)!.added += Number.isFinite(qty) ? qty : 0;
+    }
+
+    return Array.from(buckets.values());
+  }, [inventoryData, shippedData]);
+
+  const orderStatusData = useMemo(() => {
+    const statusCounts = {
+      pending: 0,
+      shipped: shippedData.length,
+      rejected: 0,
+      processing: 0,
+    };
+
+    for (const req of shipmentRequests) {
+      const status = (req.status || "").toLowerCase();
+      if (status === "pending") statusCounts.pending += 1;
+      else if (status === "rejected") statusCounts.rejected += 1;
+      else if (status === "approved" || status === "in_progress" || status === "confirmed") statusCounts.processing += 1;
+    }
+
+    return [
+      { name: "Shipped", value: statusCounts.shipped, fill: "var(--color-shipped)" },
+      { name: "Pending", value: statusCounts.pending, fill: "var(--color-pending)" },
+      { name: "Processing", value: statusCounts.processing, fill: "var(--color-processing)" },
+      { name: "Rejected", value: statusCounts.rejected, fill: "var(--color-rejected)" },
+    ];
+  }, [shipmentRequests, shippedData.length]);
+
+  const sourceSplitData = useMemo(
+    () => [
+      { source: "Shopify", count: sourceSplit.shopify, fill: "var(--color-shopify)" },
+      { source: "eBay", count: sourceSplit.ebay, fill: "var(--color-ebay)" },
+      { source: "Manual", count: sourceSplit.manual, fill: "var(--color-manual)" },
+    ],
+    [sourceSplit]
+  );
+
+  const trendChartConfig = {
+    shipped: { label: "Shipped Units", color: "#3b82f6" },
+    added: { label: "Inventory Added", color: "#22c55e" },
+  } satisfies ChartConfig;
+
+  const orderStatusChartConfig = {
+    shipped: { label: "Shipped", color: "#22c55e" },
+    pending: { label: "Pending", color: "#f59e0b" },
+    processing: { label: "Processing", color: "#3b82f6" },
+    rejected: { label: "Rejected", color: "#ef4444" },
+  } satisfies ChartConfig;
+
+  const sourceSplitChartConfig = {
+    shopify: { label: "Shopify", color: "#2563eb" },
+    ebay: { label: "eBay", color: "#22c55e" },
+    manual: { label: "Manual", color: "#f59e0b" },
+  } satisfies ChartConfig;
 
   return (
     <div className="space-y-6">
@@ -299,51 +404,82 @@ export default function DashboardPage() {
       <div className="grid gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2 border-2 shadow-xl">
           <CardHeader className="pb-4">
-            <CardTitle className="text-lg font-semibold text-slate-900">Operations Snapshot</CardTitle>
+            <CardTitle className="text-lg font-semibold text-slate-900">Inventory & Shipment Trend (14 days)</CardTitle>
             <CardDescription>
-              Quick view of inventory source distribution and order flow.
+              Compare shipped units vs newly added inventory.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-lg border bg-slate-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Shopify Items</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-900">{sourceSplit.shopify}</p>
-              </div>
-              <div className="rounded-lg border bg-slate-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">eBay Items</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-900">{sourceSplit.ebay}</p>
-              </div>
-              <div className="rounded-lg border bg-slate-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Manual Items</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-900">{sourceSplit.manual}</p>
-              </div>
-            </div>
+          <CardContent>
+            <ChartContainer config={trendChartConfig} className="h-[300px] w-full">
+              <AreaChart data={inventoryAndShipmentTrend}>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Area
+                  dataKey="added"
+                  type="monotone"
+                  fill="var(--color-added)"
+                  fillOpacity={0.25}
+                  stroke="var(--color-added)"
+                  strokeWidth={2}
+                />
+                <Area
+                  dataKey="shipped"
+                  type="monotone"
+                  fill="var(--color-shipped)"
+                  fillOpacity={0.25}
+                  stroke="var(--color-shipped)"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
 
-            <div className="rounded-lg border bg-white p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h4 className="font-medium text-slate-900">Priority Actions</h4>
-                <span className="text-xs text-slate-500">Top workflow shortcuts</span>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Link href="/dashboard/inventory" className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-slate-50">
-                  Inventory Management
-                  <ArrowRight className="h-4 w-4 text-slate-400" />
-                </Link>
-                <Link href="/dashboard/shipped-orders" className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-slate-50">
-                  Shipped Orders
-                  <ArrowRight className="h-4 w-4 text-slate-400" />
-                </Link>
-                <Link href="/dashboard/create-shipment-with-labels" className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-slate-50">
-                  Create Shipment
-                  <ArrowRight className="h-4 w-4 text-slate-400" />
-                </Link>
-                <Link href="/dashboard/integrations" className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-slate-50">
-                  Integration Settings
-                  <ArrowRight className="h-4 w-4 text-slate-400" />
-                </Link>
-              </div>
-            </div>
+        <Card className="border-2 shadow-xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold text-slate-900">Orders by Status</CardTitle>
+            <CardDescription>Live mix of shipped and request statuses.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={orderStatusChartConfig} className="h-[300px] w-full">
+              <PieChart>
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Pie
+                  data={orderStatusData}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={58}
+                  outerRadius={96}
+                  paddingAngle={2}
+                >
+                  {orderStatusData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Card className="xl:col-span-2 border-2 shadow-xl">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-slate-900">Source Split</CardTitle>
+            <CardDescription>Inventory items by source channel.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={sourceSplitChartConfig} className="h-[260px] w-full">
+              <BarChart data={sourceSplitData}>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="source" tickLine={false} axisLine={false} tickMargin={8} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Bar dataKey="count" radius={8} />
+              </BarChart>
+            </ChartContainer>
           </CardContent>
         </Card>
 
