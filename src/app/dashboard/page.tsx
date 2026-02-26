@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -34,7 +33,6 @@ import {
   RefreshCw,
   CheckCircle2,
   PlugZap,
-  Bell,
   Search,
   Filter,
 } from "lucide-react";
@@ -394,23 +392,23 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-full bg-neutral-50/80">
-      {/* Top navbar - glassmorphism, Stripe/Linear style */}
-      <header className="sticky top-0 z-10 border-b border-neutral-200/80 bg-white/80 shadow-sm backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
+      <div className="mx-auto max-w-[1600px] space-y-8 px-4 py-6 md:px-6">
+        {/* Page title + compact toolbar (single app header stays in layout) */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-neutral-900 sm:text-2xl">Dashboard</h1>
             <p className="text-sm text-neutral-500">3PL operations overview</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <DateRangePicker
               fromDate={dateRangeFrom}
               toDate={dateRangeTo}
               setFromDate={setDateRangeFrom}
               setToDate={setDateRangeTo}
-              className="h-9 w-[240px] border-neutral-200 bg-white/90 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+              className="h-9 w-[240px] border-neutral-200 bg-white text-sm shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
             />
             <Select value={sourceFilter} onValueChange={setSourceFilter}>
-              <SelectTrigger className="h-9 w-[140px] border-neutral-200 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+              <SelectTrigger className="h-9 w-[140px] border-neutral-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                 <Filter className="mr-1.5 h-4 w-4 text-neutral-400" />
                 <SelectValue placeholder="Source" />
               </SelectTrigger>
@@ -421,26 +419,13 @@ export default function DashboardPage() {
                 <SelectItem value="manual">Manual</SelectItem>
               </SelectContent>
             </Select>
-            <div className="relative hidden w-[180px] sm:block">
+            <div className="relative w-[160px] sm:w-[180px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-              <Input className="h-9 border-neutral-200 bg-white/90 pl-9 text-sm placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.05)]" placeholder="Search..." />
-            </div>
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700">
-              <Bell className="h-4 w-4" />
-            </Button>
-            <div className="ml-1 flex items-center gap-2 rounded-lg border border-neutral-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-              <Avatar className="h-7 w-7">
-                <AvatarFallback className="bg-neutral-100 text-xs font-medium text-neutral-600">
-                  {(userProfile?.name || userProfile?.email || "U").slice(0, 1).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="hidden text-sm font-medium text-neutral-700 sm:inline">{userProfile?.name || "User"}</span>
+              <Input className="h-9 border-neutral-200 bg-white pl-9 text-sm placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.05)]" placeholder="Search..." />
             </div>
           </div>
         </div>
-      </header>
 
-      <div className="mx-auto max-w-[1600px] space-y-8 px-4 py-6 md:px-6">
         {/* KPI cards - soft shadows, rounded-xl */}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {kpiCards.map((kpi) => {
