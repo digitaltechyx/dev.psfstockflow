@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useCollection } from "@/hooks/use-collection";
 import type { UserProfile, Invoice } from "@/types";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,6 +17,10 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   Calendar,
+  PlugZap,
+  AlertTriangle,
+  Wallet,
+  ArrowRight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -227,6 +232,15 @@ export default function AdminDashboardPage() {
   const [pendingInvoicesCount, setPendingInvoicesCount] = useState(0);
   const [pendingInvoicesAmount, setPendingInvoicesAmount] = useState(0);
   const [invoicesLoading, setInvoicesLoading] = useState(true);
+  const [financialMetrics, setFinancialMetrics] = useState({
+    billedInRange: 0,
+    paidInRange: 0,
+  });
+  const [integrationStats, setIntegrationStats] = useState({
+    shopify: 0,
+    ebay: 0,
+  });
+  const [integrationLoading, setIntegrationLoading] = useState(true);
 
   useEffect(() => {
     const fetchPendingInvoices = async () => {
@@ -234,9 +248,16 @@ export default function AdminDashboardPage() {
         setInvoicesLoading(true);
         let totalPending = 0;
         let totalPendingAmount = 0;
+        let billedInRange = 0;
+        let paidInRange = 0;
+        const invoiceDate = (inv: Partial<Invoice>): Date | null => {
+          const ms = toMs((inv as any)?.issuedAt || (inv as any)?.date || (inv as any)?.createdAt || (inv as any)?.generatedAt);
+          return ms ? new Date(ms) : null;
+        };
         if (!users || users.length === 0) {
           setPendingInvoicesCount(0);
           setPendingInvoicesAmount(0);
+          setFinancialMetrics({ billedInRange: 0, paidInRange: 0 });
           setInvoicesLoading(false);
           return;
         }
@@ -249,25 +270,55 @@ export default function AdminDashboardPage() {
             const pending = userInvoices.filter((inv) => inv.status === "pending");
             totalPending += pending.length;
             totalPendingAmount += pending.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0);
+            userInvoices.forEach((inv) => {
+              const d = invoiceDate(inv);
+              if (!isDateInRange(d, dateRangeFrom, dateRangeTo)) return;
+              const amount = Number(inv.grandTotal || 0);
+              billedInRange += amount;
+              if ((inv.status || "").toLowerCase() === "paid") paidInRange += amount;
+            });
           } catch {
             // continue
           }
         }
         setPendingInvoicesCount(totalPending);
         setPendingInvoicesAmount(totalPendingAmount);
+        setFinancialMetrics({ billedInRange, paidInRange });
       } catch {
         setPendingInvoicesCount(0);
         setPendingInvoicesAmount(0);
+        setFinancialMetrics({ billedInRange: 0, paidInRange: 0 });
       } finally {
         setInvoicesLoading(false);
       }
     };
     if (users && users.length > 0) fetchPendingInvoices();
     else setInvoicesLoading(false);
-  }, [users, adminUser]);
+  }, [users, adminUser, dateRangeFrom, dateRangeTo]);
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        setIntegrationLoading(true);
+        const [shopifySnap, ebaySnap] = await Promise.all([
+          getCountFromServer(collectionGroup(db, "shopifyConnections")),
+          getCountFromServer(collectionGroup(db, "ebayConnections")),
+        ]);
+        setIntegrationStats({
+          shopify: shopifySnap.data().count || 0,
+          ebay: ebaySnap.data().count || 0,
+        });
+      } catch {
+        setIntegrationStats({ shopify: 0, ebay: 0 });
+      } finally {
+        setIntegrationLoading(false);
+      }
+    };
+    run();
+  }, []);
 
   const [chartData, setChartData] = useState<{
-    trend: Array<{ label: string; shipped: number; added: number }>;
+    trend: Array<{ label: string; shipped: number; added: number; returns: number; disposed: number }>;
     requestTrend: Array<{ label: string; total: number }>;
     requestTypes: Array<{ type: string; count: number; fill: string }>;
     statusDonut: Array<{ name: string; value: number; fill: string }>;
@@ -289,7 +340,7 @@ export default function AdminDashboardPage() {
     const run = async () => {
       setChartLoading(true);
       try {
-        const buckets = new Map<string, { label: string; shipped: number; added: number }>();
+        const buckets = new Map<string, { label: string; shipped: number; added: number; returns: number; disposed: number }>();
         const requestBuckets = new Map<string, { label: string; total: number }>();
         for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
           const d = new Date(t);
@@ -298,6 +349,8 @@ export default function AdminDashboardPage() {
             label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
             shipped: 0,
             added: 0,
+            returns: 0,
+            disposed: 0,
           });
           requestBuckets.set(key, {
             label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -402,6 +455,9 @@ export default function AdminDashboardPage() {
               else statusCounts.Processing += 1;
               const ms = toMs(data?.requestedAt || data?.date);
               if (isDateInRange(new Date(ms), start, end)) {
+                const tKey = new Date(ms).toISOString().slice(0, 10);
+                const tBucket = buckets.get(tKey);
+                if (tBucket) tBucket.returns += 1;
                 const key = new Date(ms).toISOString().slice(0, 10);
                 const bucket = requestBuckets.get(key);
                 if (bucket) bucket.total += 1;
@@ -417,6 +473,9 @@ export default function AdminDashboardPage() {
               else statusCounts.Processing += 1;
               const ms = toMs(data?.requestedAt || data?.date);
               if (isDateInRange(new Date(ms), start, end)) {
+                const tKey = new Date(ms).toISOString().slice(0, 10);
+                const tBucket = buckets.get(tKey);
+                if (tBucket) tBucket.disposed += 1;
                 const key = new Date(ms).toISOString().slice(0, 10);
                 const bucket = requestBuckets.get(key);
                 if (bucket) bucket.total += 1;
@@ -477,6 +536,8 @@ export default function AdminDashboardPage() {
   const trendChartConfig = {
     shipped: { label: "Shipped", color: "#3b82f6" },
     added: { label: "Inventory added", color: "#22c55e" },
+    returns: { label: "Returns", color: "#f97316" },
+    disposed: { label: "Disposed", color: "#8b5cf6" },
   } satisfies ChartConfig;
   const requestTypesChartConfig = {
     shipment: { label: "Shipment", color: "#2563eb" },
@@ -502,12 +563,12 @@ export default function AdminDashboardPage() {
   } satisfies ChartConfig;
 
   const kpiCards = [
-    { title: "Pending Users", value: String(pendingUsersCount), hint: "Awaiting approval", icon: Shield, color: "orange" },
-    { title: "Active Users", value: String(activeUsersCount), hint: "Approved users", icon: Users, color: "green" },
-    { title: "Pending Invoices", value: invoicesLoading ? "…" : `${pendingInvoicesCount} ($${pendingInvoicesAmount.toFixed(0)})`, hint: "Outstanding", icon: Receipt, color: "blue" },
-    { title: "Pending Requests", value: requestsLoading ? "…" : String(pendingRequestsCount), hint: "All request types", icon: Bell, color: "indigo" },
-    { title: "Shipped Today", value: shippedAndReceivedLoading ? "…" : String(ordersShippedToday), hint: "Shipments recorded", icon: Truck, color: "teal" },
-    { title: "Received Today", value: shippedAndReceivedLoading ? "…" : String(receivedUnitsToday), hint: "Units added", icon: PackageCheck, color: "amber" },
+    { title: "Pending Users", value: String(pendingUsersCount), hint: "Awaiting approval", icon: Shield, color: "orange", href: "/admin/dashboard/users" },
+    { title: "Active Users", value: String(activeUsersCount), hint: "Approved users", icon: Users, color: "green", href: "/admin/dashboard/users" },
+    { title: "Pending Invoices", value: invoicesLoading ? "…" : `${pendingInvoicesCount} ($${pendingInvoicesAmount.toFixed(0)})`, hint: "Outstanding", icon: Receipt, color: "blue", href: "/admin/dashboard/invoices" },
+    { title: "Pending Requests", value: requestsLoading ? "…" : String(pendingRequestsCount), hint: "All request types", icon: Bell, color: "indigo", href: "/admin/dashboard/notifications" },
+    { title: "Shipped Today", value: shippedAndReceivedLoading ? "…" : String(ordersShippedToday), hint: "Shipments recorded", icon: Truck, color: "teal", href: "/admin/dashboard/shopify-orders" },
+    { title: "Received Today", value: shippedAndReceivedLoading ? "…" : String(receivedUnitsToday), hint: "Units added", icon: PackageCheck, color: "amber", href: "/admin/dashboard/inventory-management" },
   ];
 
   const colorClasses: Record<string, string> = {
@@ -526,6 +587,17 @@ export default function AdminDashboardPage() {
     teal: "bg-teal-500/12 text-teal-600",
     amber: "bg-amber-500/12 text-amber-600",
   };
+  const collectionRate = financialMetrics.billedInRange > 0
+    ? Math.round((financialMetrics.paidInRange / financialMetrics.billedInRange) * 100)
+    : 0;
+  const integrationHealth = integrationStats.shopify + integrationStats.ebay > 0 ? "Healthy" : "Needs setup";
+  const alerts = [
+    pendingUsersCount > 0 ? `${pendingUsersCount} users waiting approval` : null,
+    pendingRequestsCount > 20 ? `${pendingRequestsCount} pending requests need review` : null,
+    pendingInvoicesAmount > 0 ? `$${pendingInvoicesAmount.toFixed(0)} outstanding invoices` : null,
+    integrationStats.shopify === 0 ? "Shopify integration not connected" : null,
+    integrationStats.ebay === 0 ? "eBay integration not connected" : null,
+  ].filter((v): v is string => Boolean(v));
 
   return (
     <div className="min-h-full bg-gradient-to-b from-slate-50/95 to-slate-100/80">
@@ -553,26 +625,129 @@ export default function AdminDashboardPage() {
           {kpiCards.map((kpi) => {
             const Icon = kpi.icon;
             return (
-              <Card
-                key={kpi.title}
-                className={cn(
-                  "overflow-hidden rounded-xl border transition-shadow hover:shadow-md",
-                  colorClasses[kpi.color] || colorClasses.blue
-                )}
-              >
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", iconBgClasses[kpi.color] || iconBgClasses.blue)}>
-                      <Icon className="h-5 w-5" />
+              <Link key={kpi.title} href={kpi.href} className="block">
+                <Card
+                  className={cn(
+                    "overflow-hidden rounded-xl border transition-shadow hover:shadow-md",
+                    colorClasses[kpi.color] || colorClasses.blue
+                  )}
+                >
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between">
+                      <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", iconBgClasses[kpi.color] || iconBgClasses.blue)}>
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-slate-400" />
                     </div>
-                  </div>
-                  <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">{kpi.value}</p>
-                  <p className="mt-0.5 text-sm font-medium text-slate-600">{kpi.title}</p>
-                  <p className="mt-1 text-xs text-slate-500">{kpi.hint}</p>
-                </CardContent>
-              </Card>
+                    <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">{kpi.value}</p>
+                    <p className="mt-0.5 text-sm font-medium text-slate-600">{kpi.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">{kpi.hint}</p>
+                  </CardContent>
+                </Card>
+              </Link>
             );
           })}
+        </section>
+
+        {/* Financial + Integrations + Alerts */}
+        <section className="grid gap-6 lg:grid-cols-12">
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] lg:col-span-4">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
+                  <Wallet className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Finance snapshot</CardTitle>
+                  <CardDescription className="text-slate-500">Selected date range</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              {invoicesLoading ? (
+                <Skeleton className="h-20 w-full rounded-lg" />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500">Billed</span>
+                    <span className="font-semibold text-slate-900">${financialMetrics.billedInRange.toFixed(0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500">Paid</span>
+                    <span className="font-semibold text-emerald-600">${financialMetrics.paidInRange.toFixed(0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500">Collection rate</span>
+                    <span className="font-semibold text-slate-900">{collectionRate}%</span>
+                  </div>
+                  <Link href="/admin/dashboard/invoices" className="inline-flex items-center text-xs font-medium text-emerald-600 hover:underline">
+                    Open invoices <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] lg:col-span-4">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-600">
+                  <PlugZap className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Integrations</CardTitle>
+                  <CardDescription className="text-slate-500">{integrationHealth}</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              {integrationLoading ? (
+                <Skeleton className="h-20 w-full rounded-lg" />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500">Shopify connections</span>
+                    <span className="font-semibold text-slate-900">{integrationStats.shopify}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500">eBay connections</span>
+                    <span className="font-semibold text-slate-900">{integrationStats.ebay}</span>
+                  </div>
+                  <Link href="/admin/dashboard/shopify-orders" className="inline-flex items-center text-xs font-medium text-cyan-600 hover:underline">
+                    Open order integrations <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] lg:col-span-4">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-500/10 text-rose-600">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Alerts</CardTitle>
+                  <CardDescription className="text-slate-500">Needs attention</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              <div className="space-y-2">
+                {alerts.length === 0 ? (
+                  <p className="text-sm text-emerald-600">No critical alerts right now.</p>
+                ) : (
+                  alerts.slice(0, 4).map((alert) => (
+                    <p key={alert} className="text-sm text-slate-700">• {alert}</p>
+                  ))
+                )}
+                <Link href="/admin/dashboard/notifications" className="inline-flex items-center text-xs font-medium text-rose-600 hover:underline">
+                  Open notifications <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         {/* Charts row 1: Trend + Status donut */}
@@ -603,6 +778,8 @@ export default function AdminDashboardPage() {
                     <ChartLegend content={<ChartLegendContent />} />
                     <Area dataKey="shipped" type="monotone" fill="var(--color-shipped)" fillOpacity={0.2} stroke="var(--color-shipped)" strokeWidth={2} />
                     <Area dataKey="added" type="monotone" fill="var(--color-added)" fillOpacity={0.2} stroke="var(--color-added)" strokeWidth={2} />
+                    <Area dataKey="returns" type="monotone" fill="var(--color-returns)" fillOpacity={0.16} stroke="var(--color-returns)" strokeWidth={2} />
+                    <Area dataKey="disposed" type="monotone" fill="var(--color-disposed)" fillOpacity={0.16} stroke="var(--color-disposed)" strokeWidth={2} />
                   </AreaChart>
                 </ChartContainer>
               )}
@@ -763,7 +940,11 @@ export default function AdminDashboardPage() {
                       ) : (
                         chartData.recentActivity.map((row) => (
                           <TableRow key={row.id} className="border-slate-100">
-                            <TableCell className="font-medium text-slate-900">{row.type}</TableCell>
+                            <TableCell className="font-medium text-slate-900">
+                              <Link href="/admin/dashboard/notifications" className="hover:underline">
+                                {row.type}
+                              </Link>
+                            </TableCell>
                             <TableCell className="text-slate-600">{row.userName}</TableCell>
                             <TableCell className="text-slate-600">{row.date}</TableCell>
                             <TableCell>
