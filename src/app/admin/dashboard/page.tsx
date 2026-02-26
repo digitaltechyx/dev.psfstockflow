@@ -312,17 +312,33 @@ export default function AdminDashboardPage() {
         const recentList: Array<{ id: string; type: string; userName: string; date: string; status: string; ms: number }> = [];
 
         const nonAdminUserIds = (users || []).map((u) => u.uid).filter((id): id is string => !!id && id !== adminUid);
+        const BATCH_SIZE = 6;
+        const MAX_USERS = 24;
+        const userIdsToFetch = nonAdminUserIds.slice(0, MAX_USERS);
 
-        for (const uid of nonAdminUserIds.slice(0, 50)) {
+        const fetchOneUser = async (uid: string) => {
           try {
             const [shippedSnap, inventorySnap, shipReqSnap, invReqSnap, returnsSnap, disposeSnap] = await Promise.all([
               getDocs(collection(db, `users/${uid}/shipped`)),
               getDocs(collection(db, `users/${uid}/inventory`)),
-              getDocs(query(collection(db, `users/${uid}/shipmentRequests`), limit(100))),
-              getDocs(query(collection(db, `users/${uid}/inventoryRequests`), limit(100))),
-              getDocs(query(collection(db, `users/${uid}/productReturns`), limit(50))),
-              getDocs(query(collection(db, `users/${uid}/disposeRequests`), limit(50))),
+              getDocs(query(collection(db, `users/${uid}/shipmentRequests`), limit(80))),
+              getDocs(query(collection(db, `users/${uid}/inventoryRequests`), limit(80))),
+              getDocs(query(collection(db, `users/${uid}/productReturns`), limit(40))),
+              getDocs(query(collection(db, `users/${uid}/disposeRequests`), limit(40))),
             ]);
+            return { uid, shippedSnap, inventorySnap, shipReqSnap, invReqSnap, returnsSnap, disposeSnap };
+          } catch {
+            return null;
+          }
+        };
+
+        for (let i = 0; i < userIdsToFetch.length; i += BATCH_SIZE) {
+          const batch = userIdsToFetch.slice(i, i + BATCH_SIZE);
+          const results = await Promise.all(batch.map(fetchOneUser));
+          for (const res of results) {
+            if (!res) continue;
+            const { uid, shippedSnap, inventorySnap, shipReqSnap, invReqSnap, returnsSnap, disposeSnap } = res;
+            const userName = users?.find((u) => u.uid === uid)?.name || users?.find((u) => u.uid === uid)?.email || "User";
 
             shippedSnap.docs.forEach((doc) => {
               const data = doc.data() as ShippedDoc;
@@ -344,8 +360,6 @@ export default function AdminDashboardPage() {
               const bucket = buckets.get(key);
               if (bucket) bucket.added += Number(data?.quantity) || 0;
             });
-
-            const userName = users?.find((u) => u.uid === uid)?.name || users?.find((u) => u.uid === uid)?.email || "User";
 
             shipReqSnap.docs.forEach((doc) => {
               const data = doc.data() as RequestDoc;
@@ -409,8 +423,6 @@ export default function AdminDashboardPage() {
                 userRequestCounts.set(userName, (userRequestCounts.get(userName) || 0) + 1);
               }
             });
-          } catch {
-            // skip user
           }
         }
 
