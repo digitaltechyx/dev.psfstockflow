@@ -4,31 +4,98 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useCollection } from "@/hooks/use-collection";
 import type { UserProfile, Invoice } from "@/types";
 import { useAuth } from "@/hooks/use-auth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Shield, Receipt, Bell, Truck, PackageCheck } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Users,
+  Shield,
+  Receipt,
+  Bell,
+  Truck,
+  PackageCheck,
+  TrendingUp,
+  BarChart3,
+  PieChart as PieChartIcon,
+  Calendar,
+} from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { collection, collectionGroup, getCountFromServer, getDocs, onSnapshot, query, where } from "firebase/firestore";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { collection, collectionGroup, getCountFromServer, getDocs, onSnapshot, query, where, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { Area, AreaChart, Bar, BarChart, Pie, PieChart, CartesianGrid, XAxis, YAxis, Cell } from "recharts";
+import { cn } from "@/lib/utils";
+
+function toMs(v: unknown): number {
+  if (!v) return 0;
+  if (typeof v === "string") {
+    const t = new Date(v).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  }
+  if (typeof v === "object" && v !== null && "seconds" in v && typeof (v as { seconds: number }).seconds === "number") {
+    return (v as { seconds: number }).seconds * 1000;
+  }
+  if (v instanceof Date) return v.getTime();
+  return 0;
+}
+
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function endOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+}
+function isDateInRange(date: Date | null, from?: Date, to?: Date): boolean {
+  if (!date) return false;
+  if (!from && !to) return true;
+  const t = date.getTime();
+  if (from && t < startOfDay(from).getTime()) return false;
+  if (to && t > endOfDay(to).getTime()) return false;
+  return true;
+}
+
+type ShippedDoc = { date?: unknown; shippedQty?: number; items?: Array<{ shippedQty?: number; quantity?: number }> };
+type InventoryDoc = { dateAdded?: unknown; receivingDate?: unknown; quantity?: number };
+type RequestDoc = { status?: string; requestedAt?: unknown; date?: unknown };
 
 export default function AdminDashboardPage() {
   const { userProfile: adminUser } = useAuth();
   const { data: users } = useCollection<UserProfile>("users");
 
+  const [dateRangeFrom, setDateRangeFrom] = useState<Date | undefined>();
+  const [dateRangeTo, setDateRangeTo] = useState<Date | undefined>();
+  const trendDays = 30;
+  const hasDateRange = Boolean(dateRangeFrom && dateRangeTo);
+
   const activeUsersCount = useMemo(() => {
     if (!users || !adminUser?.uid) return 0;
-    return users.filter((user) => 
-      user.uid !== adminUser.uid && (user.status === "approved" || !user.status) && user.status !== "deleted"
-  ).length;
-  }, [users, adminUser]);
-  
-  const pendingUsersCount = useMemo(() => {
-    if (!users || !adminUser?.uid) return 0;
-    return users.filter((user) => 
-      user.uid !== adminUser.uid && user.status === "pending"
+    return users.filter(
+      (user) =>
+        user.uid !== adminUser.uid &&
+        (user.status === "approved" || !user.status) &&
+        user.status !== "deleted"
     ).length;
   }, [users, adminUser]);
 
-  // Requests stats (all users) – pending only
+  const pendingUsersCount = useMemo(() => {
+    if (!users || !adminUser?.uid) return 0;
+    return users.filter((user) => user.uid !== adminUser.uid && user.status === "pending").length;
+  }, [users, adminUser]);
+
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [requestsLoading, setRequestsLoading] = useState(true);
 
@@ -36,7 +103,6 @@ export default function AdminDashboardPage() {
     const run = async () => {
       try {
         setRequestsLoading(true);
-
         const countStatuses = async (collectionName: string, statuses: string[]) => {
           const counts = await Promise.all(
             statuses.map(async (status) => {
@@ -44,47 +110,39 @@ export default function AdminDashboardPage() {
                 const q = query(collectionGroup(db, collectionName), where("status", "==", status));
                 const snap = await getCountFromServer(q);
                 return snap.data().count || 0;
-              } catch (error) {
-                // Permission denied or other errors - return 0
-                console.warn(`Failed to count ${collectionName} with status ${status}:`, error);
+              } catch {
                 return 0;
               }
             })
           );
           return counts.reduce((a, b) => a + b, 0);
         };
-
         const userIdsForFallback = (users || [])
-          .map((u: any) => String(u?.uid || u?.id || ""))
-          .filter((id) => id && id.trim() !== "" && id !== adminUser?.uid);
-
-        // Total pending requests (all types)
+          .map((u: UserProfile) => String(u?.uid || ""))
+          .filter((id) => id && id !== adminUser?.uid);
         const pendingCounts = await Promise.all([
           countStatuses("shipmentRequests", ["pending", "Pending"]).catch(() => 0),
           countStatuses("inventoryRequests", ["pending", "Pending"]).catch(() => 0),
           countStatuses("productReturns", ["pending", "Pending", "approved", "Approved", "in_progress", "In Progress", "in progress"]).catch(() => 0),
         ]);
         let pendingTotal = pendingCounts.reduce((a, b) => a + b, 0);
-
-        // Fallback per-user if collectionGroup counts are blocked
         if (pendingTotal === 0 && userIdsForFallback.length > 0) {
           try {
-            const perUserPending = await Promise.all(
+            const perUser = await Promise.all(
               userIdsForFallback.map(async (uid) => {
-                const [shipSnap, invSnap, prSnap] = await Promise.all([
+                const [s, i, p] = await Promise.all([
                   getDocs(query(collection(db, `users/${uid}/shipmentRequests`), where("status", "in", ["pending", "Pending"]))),
                   getDocs(query(collection(db, `users/${uid}/inventoryRequests`), where("status", "in", ["pending", "Pending"]))),
                   getDocs(query(collection(db, `users/${uid}/productReturns`), where("status", "in", ["pending", "Pending", "approved", "Approved", "in_progress", "In Progress", "in progress"]))),
                 ]);
-                return shipSnap.size + invSnap.size + prSnap.size;
+                return s.size + i.size + p.size;
               })
             );
-            pendingTotal = perUserPending.reduce((a, b) => a + b, 0);
+            pendingTotal = perUser.reduce((a, b) => a + b, 0);
           } catch {
-            // ignore fallback errors
+            // ignore
           }
         }
-
         setPendingRequestsCount(pendingTotal);
       } catch {
         setPendingRequestsCount(0);
@@ -92,31 +150,14 @@ export default function AdminDashboardPage() {
         setRequestsLoading(false);
       }
     };
-
     run();
     const interval = setInterval(run, 60000);
     return () => clearInterval(interval);
   }, [users, adminUser]);
 
-  // Orders shipped today & received units today (all users) – real-time via Firestore listeners
   const [ordersShippedToday, setOrdersShippedToday] = useState(0);
   const [receivedUnitsToday, setReceivedUnitsToday] = useState(0);
   const [shippedAndReceivedLoading, setShippedAndReceivedLoading] = useState(true);
-
-  const toMs = useMemo(() => {
-    return (v: unknown): number => {
-      if (!v) return 0;
-      if (typeof v === "string") {
-        const t = new Date(v).getTime();
-        return Number.isNaN(t) ? 0 : t;
-      }
-      if (typeof v === "object" && v !== null && "seconds" in v && typeof (v as { seconds: number }).seconds === "number") {
-        return (v as { seconds: number }).seconds * 1000;
-      }
-      if (v instanceof Date) return v.getTime();
-      return 0;
-    };
-  }, []);
 
   useEffect(() => {
     const adminUid = adminUser?.uid;
@@ -126,13 +167,11 @@ export default function AdminDashboardPage() {
       setShippedAndReceivedLoading(false);
       return;
     }
-
     let loadedShipped = false;
     let loadedInventory = false;
     const maybeDone = () => {
       if (loadedShipped && loadedInventory) setShippedAndReceivedLoading(false);
     };
-
     const now = () => new Date();
     const getTodayBounds = () => {
       const n = now();
@@ -149,15 +188,14 @@ export default function AdminDashboardPage() {
         const pathSegments = d.ref.path.split("/");
         const userId = pathSegments[1];
         if (userId === adminUid) return;
-        const data = d.data() as { date?: unknown };
+        const data = d.data() as ShippedDoc;
         const ms = toMs(data?.date);
         if (inToday(ms, { start, end })) count += 1;
       });
       setOrdersShippedToday(count);
       loadedShipped = true;
       maybeDone();
-    }, (err) => {
-      console.warn("Admin dashboard: shipped snapshot", err);
+    }, () => {
       loadedShipped = true;
       maybeDone();
     });
@@ -169,26 +207,23 @@ export default function AdminDashboardPage() {
         const pathSegments = d.ref.path.split("/");
         const userId = pathSegments[1];
         if (userId === adminUid) return;
-        const data = d.data() as { dateAdded?: unknown; receivingDate?: unknown; quantity?: number };
+        const data = d.data() as InventoryDoc;
         const receiveMs = toMs(data?.receivingDate) || toMs(data?.dateAdded);
         if (inToday(receiveMs, { start, end })) qty += Number(data?.quantity) || 0;
       });
       setReceivedUnitsToday(qty);
       loadedInventory = true;
       maybeDone();
-    }, (err) => {
-      console.warn("Admin dashboard: inventory snapshot", err);
+    }, () => {
       loadedInventory = true;
       maybeDone();
     });
-
     return () => {
       unsubShipped();
       unsubInventory();
     };
-  }, [adminUser?.uid, toMs]);
+  }, [adminUser?.uid]);
 
-  // Get pending invoices count and amount
   const [pendingInvoicesCount, setPendingInvoicesCount] = useState(0);
   const [pendingInvoicesAmount, setPendingInvoicesAmount] = useState(0);
   const [invoicesLoading, setInvoicesLoading] = useState(true);
@@ -199,165 +234,430 @@ export default function AdminDashboardPage() {
         setInvoicesLoading(true);
         let totalPending = 0;
         let totalPendingAmount = 0;
-        
-        // Ensure users array is valid and not empty
         if (!users || users.length === 0) {
           setPendingInvoicesCount(0);
           setPendingInvoicesAmount(0);
           setInvoicesLoading(false);
           return;
         }
-        
         for (const user of users) {
-          // Normalize user ID - handle both uid and id fields
           const userId = user?.uid || user?.id;
-          // Skip if no valid user ID or if it's the admin user
-          if (!userId || typeof userId !== 'string' || userId.trim() === '' || userId === adminUser?.uid) {
-            continue;
-          }
+          if (!userId || typeof userId !== "string" || userId.trim() === "" || userId === adminUser?.uid) continue;
           try {
-            const invoicesRef = collection(db, `users/${userId}/invoices`);
-            const invoicesSnapshot = await getDocs(invoicesRef);
-            const userInvoices = invoicesSnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            })) as Invoice[];
-            
-            const pending = userInvoices.filter(inv => inv.status === 'pending');
+            const invoicesSnapshot = await getDocs(collection(db, `users/${userId}/invoices`));
+            const userInvoices = invoicesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Invoice[];
+            const pending = userInvoices.filter((inv) => inv.status === "pending");
             totalPending += pending.length;
             totalPendingAmount += pending.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0);
-          } catch (error) {
-            console.error(`Error fetching invoices for user ${userId}:`, error);
-            // Continue with other users even if one fails
+          } catch {
+            // continue
           }
         }
-        
         setPendingInvoicesCount(totalPending);
         setPendingInvoicesAmount(totalPendingAmount);
-      } catch (error) {
-        console.error('Error fetching pending invoices:', error);
-        // Set defaults on error
+      } catch {
         setPendingInvoicesCount(0);
         setPendingInvoicesAmount(0);
       } finally {
         setInvoicesLoading(false);
       }
     };
-
-    if (users && users.length > 0) {
-      fetchPendingInvoices();
-    } else {
-      setInvoicesLoading(false);
-    }
+    if (users && users.length > 0) fetchPendingInvoices();
+    else setInvoicesLoading(false);
   }, [users, adminUser]);
 
+  const [chartData, setChartData] = useState<{
+    trend: Array<{ label: string; shipped: number; added: number }>;
+    requestTypes: Array<{ type: string; count: number; fill: string }>;
+    statusDonut: Array<{ name: string; value: number; fill: string }>;
+    recentActivity: Array<{ id: string; type: string; userName: string; date: string; status: string }>;
+  }>({ trend: [], requestTypes: [], statusDonut: [], recentActivity: [] });
+  const [chartLoading, setChartLoading] = useState(true);
+
+  useEffect(() => {
+    if (!adminUser?.uid || !users?.length) {
+      setChartData({ trend: [], requestTypes: [], statusDonut: [], recentActivity: [] });
+      setChartLoading(false);
+      return;
+    }
+    const adminUid = adminUser.uid;
+    const start = hasDateRange && dateRangeFrom ? startOfDay(dateRangeFrom) : new Date(Date.now() - trendDays * 86400000);
+    const end = hasDateRange && dateRangeTo ? endOfDay(dateRangeTo) : new Date();
+
+    const run = async () => {
+      setChartLoading(true);
+      try {
+        const buckets = new Map<string, { label: string; shipped: number; added: number }>();
+        for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
+          const d = new Date(t);
+          const key = d.toISOString().slice(0, 10);
+          buckets.set(key, {
+            label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            shipped: 0,
+            added: 0,
+          });
+        }
+
+        const requestTypeCounts = { Shipment: 0, Inventory: 0, Returns: 0, Dispose: 0 };
+        const statusCounts = { Pending: 0, Processing: 0, Shipped: 0, Rejected: 0 };
+        let shippedOrderCount = 0;
+        const recentList: Array<{ id: string; type: string; userName: string; date: string; status: string; ms: number }> = [];
+
+        const nonAdminUserIds = (users || []).map((u) => u.uid).filter((id): id is string => !!id && id !== adminUid);
+
+        for (const uid of nonAdminUserIds.slice(0, 50)) {
+          try {
+            const [shippedSnap, inventorySnap, shipReqSnap, invReqSnap, returnsSnap, disposeSnap] = await Promise.all([
+              getDocs(collection(db, `users/${uid}/shipped`)),
+              getDocs(collection(db, `users/${uid}/inventory`)),
+              getDocs(query(collection(db, `users/${uid}/shipmentRequests`), limit(100))),
+              getDocs(query(collection(db, `users/${uid}/inventoryRequests`), limit(100))),
+              getDocs(query(collection(db, `users/${uid}/productReturns`), limit(50))),
+              getDocs(query(collection(db, `users/${uid}/disposeRequests`), limit(50))),
+            ]);
+
+            shippedSnap.docs.forEach((doc) => {
+              const data = doc.data() as ShippedDoc;
+              const date = new Date(toMs(data?.date));
+              if (!isDateInRange(date, start, end)) return;
+              shippedOrderCount += 1;
+              const key = date.toISOString().slice(0, 10);
+              const bucket = buckets.get(key);
+              if (bucket) {
+                const qty = Number(data?.shippedQty ?? 0) || (Array.isArray(data?.items) ? data.items.reduce((s, i) => s + (Number(i?.shippedQty ?? i?.quantity) || 0), 0) : 0);
+                bucket.shipped += Number.isFinite(qty) ? qty : 0;
+              }
+            });
+            inventorySnap.docs.forEach((doc) => {
+              const data = doc.data() as InventoryDoc;
+              const date = new Date(toMs(data?.receivingDate) || toMs(data?.dateAdded));
+              if (!isDateInRange(date, start, end)) return;
+              const key = date.toISOString().slice(0, 10);
+              const bucket = buckets.get(key);
+              if (bucket) bucket.added += Number(data?.quantity) || 0;
+            });
+
+            const userName = users?.find((u) => u.uid === uid)?.name || users?.find((u) => u.uid === uid)?.email || "User";
+
+            shipReqSnap.docs.forEach((doc) => {
+              const data = doc.data() as RequestDoc;
+              requestTypeCounts.Shipment += 1;
+              const status = (data?.status || "").toLowerCase();
+              if (status === "pending") statusCounts.Pending += 1;
+              else if (status === "rejected") statusCounts.Rejected += 1;
+              else if (["approved", "in_progress", "confirmed", "shipped"].includes(status)) statusCounts.Processing += 1;
+              const ms = toMs(data?.requestedAt || data?.date);
+              if (isDateInRange(new Date(ms), start, end)) recentList.push({ id: doc.id, type: "Shipment", userName, date: new Date(ms).toLocaleDateString(), status: data?.status || "—", ms });
+            });
+            invReqSnap.docs.forEach((doc) => {
+              const data = doc.data() as RequestDoc;
+              requestTypeCounts.Inventory += 1;
+              const status = (data?.status || "").toLowerCase();
+              if (status === "pending") statusCounts.Pending += 1;
+              else if (status === "rejected") statusCounts.Rejected += 1;
+              else statusCounts.Processing += 1;
+              const ms = toMs(data?.requestedAt || data?.date);
+              if (isDateInRange(new Date(ms), start, end)) recentList.push({ id: doc.id, type: "Inventory", userName, date: new Date(ms).toLocaleDateString(), status: data?.status || "—", ms });
+            });
+            returnsSnap.docs.forEach((doc) => {
+              requestTypeCounts.Returns += 1;
+              const data = doc.data() as RequestDoc;
+              const status = (data?.status || "").toLowerCase();
+              if (status === "pending") statusCounts.Pending += 1;
+              else if (status === "rejected") statusCounts.Rejected += 1;
+              else statusCounts.Processing += 1;
+            });
+            disposeSnap.docs.forEach((doc) => {
+              requestTypeCounts.Dispose += 1;
+              const data = doc.data() as RequestDoc;
+              const status = (data?.status || "").toLowerCase();
+              if (status === "pending") statusCounts.Pending += 1;
+              else if (status === "rejected") statusCounts.Rejected += 1;
+              else statusCounts.Processing += 1;
+            });
+          } catch {
+            // skip user
+          }
+        }
+
+        statusCounts.Shipped = shippedOrderCount;
+
+        const trend = Array.from(buckets.values());
+        const requestTypes = [
+          { type: "Shipment", count: requestTypeCounts.Shipment, fill: "var(--color-shipment)" },
+          { type: "Inventory", count: requestTypeCounts.Inventory, fill: "var(--color-inventory)" },
+          { type: "Returns", count: requestTypeCounts.Returns, fill: "var(--color-returns)" },
+          { type: "Dispose", count: requestTypeCounts.Dispose, fill: "var(--color-dispose)" },
+        ];
+        const statusDonut = [
+          { name: "Pending", value: statusCounts.Pending, fill: "var(--color-pending)" },
+          { name: "Processing", value: statusCounts.Processing, fill: "var(--color-processing)" },
+          { name: "Shipped", value: statusCounts.Shipped, fill: "var(--color-shipped)" },
+          { name: "Rejected", value: statusCounts.Rejected, fill: "var(--color-rejected)" },
+        ].filter((d) => d.value > 0);
+
+        recentList.sort((a, b) => b.ms - a.ms);
+        const recentActivity = recentList.slice(0, 10).map(({ id, type, userName, date, status }) => ({ id, type, userName, date, status }));
+
+        setChartData({ trend, requestTypes, statusDonut: statusDonut.length ? statusDonut : [{ name: "No data", value: 1, fill: "#94a3b8" }], recentActivity });
+      } catch {
+        setChartData({ trend: [], requestTypes: [], statusDonut: [{ name: "No data", value: 1, fill: "#94a3b8" }], recentActivity: [] });
+      } finally {
+        setChartLoading(false);
+      }
+    };
+    run();
+  }, [adminUser?.uid, users, hasDateRange, dateRangeFrom, dateRangeTo, trendDays]);
+
+  const trendChartConfig = {
+    shipped: { label: "Shipped", color: "#3b82f6" },
+    added: { label: "Inventory added", color: "#22c55e" },
+  } satisfies ChartConfig;
+  const requestTypesChartConfig = {
+    shipment: { label: "Shipment", color: "#2563eb" },
+    inventory: { label: "Inventory", color: "#16a34a" },
+    returns: { label: "Returns", color: "#ea580c" },
+    dispose: { label: "Dispose", color: "#7c3aed" },
+  } satisfies ChartConfig;
+  const statusChartConfig = {
+    Pending: { label: "Pending", color: "#f59e0b" },
+    Processing: { label: "Processing", color: "#3b82f6" },
+    Shipped: { label: "Shipped", color: "#22c55e" },
+    Rejected: { label: "Rejected", color: "#ef4444" },
+  } satisfies ChartConfig;
+
+  const kpiCards = [
+    { title: "Pending Users", value: String(pendingUsersCount), hint: "Awaiting approval", icon: Shield, color: "orange" },
+    { title: "Active Users", value: String(activeUsersCount), hint: "Approved users", icon: Users, color: "green" },
+    { title: "Pending Invoices", value: invoicesLoading ? "…" : `${pendingInvoicesCount} ($${pendingInvoicesAmount.toFixed(0)})`, hint: "Outstanding", icon: Receipt, color: "blue" },
+    { title: "Pending Requests", value: requestsLoading ? "…" : String(pendingRequestsCount), hint: "All request types", icon: Bell, color: "indigo" },
+    { title: "Shipped Today", value: shippedAndReceivedLoading ? "…" : String(ordersShippedToday), hint: "Shipments recorded", icon: Truck, color: "teal" },
+    { title: "Received Today", value: shippedAndReceivedLoading ? "…" : String(receivedUnitsToday), hint: "Units added", icon: PackageCheck, color: "amber" },
+  ];
+
+  const colorClasses: Record<string, string> = {
+    orange: "border-orange-200/60 bg-gradient-to-br from-orange-50/90 to-orange-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+    green: "border-emerald-200/60 bg-gradient-to-br from-emerald-50/90 to-emerald-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+    blue: "border-blue-200/60 bg-gradient-to-br from-blue-50/90 to-blue-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+    indigo: "border-indigo-200/60 bg-gradient-to-br from-indigo-50/90 to-indigo-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+    teal: "border-teal-200/60 bg-gradient-to-br from-teal-50/90 to-teal-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+    amber: "border-amber-200/60 bg-gradient-to-br from-amber-50/90 to-amber-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+  };
+  const iconBgClasses: Record<string, string> = {
+    orange: "bg-orange-500/12 text-orange-600",
+    green: "bg-emerald-500/12 text-emerald-600",
+    blue: "bg-blue-500/12 text-blue-600",
+    indigo: "bg-indigo-500/12 text-indigo-600",
+    teal: "bg-teal-500/12 text-teal-600",
+    amber: "bg-amber-500/12 text-amber-600",
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-2 border-orange-200/50 bg-gradient-to-br from-orange-50 to-orange-100/50 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-orange-900">Pending Users</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center shadow-md">
-              <Shield className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-orange-900">{pendingUsersCount}</div>
-            <p className="text-xs text-orange-700 mt-1">Awaiting approval</p>
-          </CardContent>
-        </Card>
+    <div className="min-h-full bg-gradient-to-b from-slate-50/95 to-slate-100/80">
+      <div className="mx-auto max-w-[1600px] space-y-8 px-4 py-6 md:px-6">
+        {/* Page title + Date picker */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Admin Dashboard</h1>
+            <p className="mt-1 text-sm text-slate-500">PSF StockFlow — operations overview</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-slate-500" />
+            <DateRangePicker
+              fromDate={dateRangeFrom}
+              toDate={dateRangeTo}
+              setFromDate={setDateRangeFrom}
+              setToDate={setDateRangeTo}
+              className="h-9 min-w-[240px] border-slate-200 bg-white text-sm shadow-sm sm:w-[260px]"
+            />
+          </div>
+        </div>
 
-        <Card className="border-2 border-green-200/50 bg-gradient-to-br from-green-50 to-green-100/50 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-900">Active Users</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-green-500 flex items-center justify-center shadow-md">
-              <Users className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-900">{activeUsersCount}</div>
-            <p className="text-xs text-green-700 mt-1">Approved users</p>
-          </CardContent>
-        </Card>
+        {/* KPI Cards — premium compact */}
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          {kpiCards.map((kpi) => {
+            const Icon = kpi.icon;
+            return (
+              <Card
+                key={kpi.title}
+                className={cn(
+                  "overflow-hidden rounded-xl border transition-shadow hover:shadow-md",
+                  colorClasses[kpi.color] || colorClasses.blue
+                )}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between">
+                    <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", iconBgClasses[kpi.color] || iconBgClasses.blue)}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">{kpi.value}</p>
+                  <p className="mt-0.5 text-sm font-medium text-slate-600">{kpi.title}</p>
+                  <p className="mt-1 text-xs text-slate-500">{kpi.hint}</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </section>
 
-        <Card className="border-2 border-blue-200/50 bg-gradient-to-br from-blue-50 to-blue-100/50 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-900">Number of Pending Invoices</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center shadow-md">
-              <Receipt className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {invoicesLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <div className="text-3xl font-bold text-blue-900">{pendingInvoicesCount}</div>
-                <p className="text-xs text-blue-700 mt-1">Pending Amount: ${pendingInvoicesAmount.toFixed(2)}</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {/* Charts row 1: Trend (area) + Request types (bar) */}
+        <section className="grid gap-6 lg:grid-cols-12">
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-8">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Shipments & inventory over time</CardTitle>
+                  <CardDescription className="text-slate-500">
+                    {hasDateRange ? "In selected date range" : `Last ${trendDays} days`}
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              {chartLoading ? (
+                <Skeleton className="h-[280px] w-full rounded-lg" />
+              ) : (
+                <ChartContainer config={trendChartConfig} className="h-[280px] w-full">
+                  <AreaChart data={chartData.trend}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgb(226 232 240)" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <Area dataKey="shipped" type="monotone" fill="var(--color-shipped)" fillOpacity={0.2} stroke="var(--color-shipped)" strokeWidth={2} />
+                    <Area dataKey="added" type="monotone" fill="var(--color-added)" fillOpacity={0.2} stroke="var(--color-added)" strokeWidth={2} />
+                  </AreaChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
 
-        <Card className="border-2 border-indigo-200/50 bg-gradient-to-br from-indigo-50 to-indigo-100/50 shadow-lg md:col-span-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-indigo-900">Total Pending Requests</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-indigo-500 flex items-center justify-center shadow-md">
-              <Bell className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {requestsLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <div className="text-3xl font-bold text-indigo-900">{pendingRequestsCount}</div>
-                <p className="text-xs text-indigo-700 mt-1">Across all request types</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-4">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
+                  <BarChart3 className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Requests by type</CardTitle>
+                  <CardDescription className="text-slate-500">Across all users</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              {chartLoading ? (
+                <Skeleton className="h-[280px] w-full rounded-lg" />
+              ) : (
+                <ChartContainer config={requestTypesChartConfig} className="h-[280px] w-full">
+                  <BarChart data={chartData.requestTypes} layout="vertical" margin={{ left: 12, right: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgb(226 232 240)" />
+                    <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} />
+                    <YAxis type="category" dataKey="type" tickLine={false} axisLine={false} width={72} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <Bar dataKey="count" nameKey="type" radius={[0, 4, 4, 0]}>
+                      {chartData.requestTypes.map((entry, i) => (
+                        <Cell key={`cell-${i}`} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+        </section>
 
-        <Card className="border-2 border-teal-200/50 bg-gradient-to-br from-teal-50 to-teal-100/50 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-teal-900">Orders Shipped Today</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-teal-500 flex items-center justify-center shadow-md">
-              <Truck className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {shippedAndReceivedLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <div className="text-3xl font-bold text-teal-900">{ordersShippedToday}</div>
-                <p className="text-xs text-teal-700 mt-1">Shipments recorded today</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {/* Charts row 2: Status donut + Recent activity table */}
+        <section className="grid gap-6 lg:grid-cols-12">
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-4">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600">
+                  <PieChartIcon className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Request status</CardTitle>
+                  <CardDescription className="text-slate-500">Pending, processing, shipped, rejected</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              {chartLoading ? (
+                <Skeleton className="h-[260px] w-full rounded-lg" />
+              ) : (
+                <ChartContainer config={statusChartConfig} className="h-[260px] w-full">
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent nameKey="name" className="grid grid-cols-2 gap-x-4 gap-y-2 justify-items-start" />} />
+                    <Pie data={chartData.statusDonut} dataKey="value" nameKey="name" innerRadius={56} outerRadius={80} paddingAngle={2}>
+                      {chartData.statusDonut.map((entry, i) => (
+                        <Cell key={`cell-${i}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
 
-        <Card className="border-2 border-amber-200/50 bg-gradient-to-br from-amber-50 to-amber-100/50 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-amber-900">Received Units Today</CardTitle>
-            <div className="h-10 w-10 rounded-full bg-amber-500 flex items-center justify-center shadow-md">
-              <PackageCheck className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {shippedAndReceivedLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <div className="text-3xl font-bold text-amber-900">{receivedUnitsToday}</div>
-                <p className="text-xs text-amber-700 mt-1">Units added to inventory today</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-8">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <CardTitle className="text-base font-semibold text-slate-900">Recent activity</CardTitle>
+              <CardDescription className="text-slate-500">Latest requests in selected period</CardDescription>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              {chartLoading ? (
+                <Skeleton className="h-[260px] w-full rounded-lg" />
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-slate-200/80">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
+                        <TableHead className="font-medium text-slate-600">Type</TableHead>
+                        <TableHead className="font-medium text-slate-600">User</TableHead>
+                        <TableHead className="font-medium text-slate-600">Date</TableHead>
+                        <TableHead className="font-medium text-slate-600">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {chartData.recentActivity.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="py-10 text-center text-sm text-slate-500">
+                            No recent activity in this period
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        chartData.recentActivity.map((row) => (
+                          <TableRow key={row.id} className="border-slate-100">
+                            <TableCell className="font-medium text-slate-900">{row.type}</TableCell>
+                            <TableCell className="text-slate-600">{row.userName}</TableCell>
+                            <TableCell className="text-slate-600">{row.date}</TableCell>
+                            <TableCell>
+                              <span
+                                className={cn(
+                                  "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
+                                  row.status.toLowerCase() === "pending" && "bg-amber-100 text-amber-800",
+                                  row.status.toLowerCase() === "approved" && "bg-blue-100 text-blue-800",
+                                  row.status.toLowerCase() === "rejected" && "bg-red-100 text-red-800",
+                                  !["pending", "approved", "rejected"].includes(row.status.toLowerCase()) && "bg-slate-100 text-slate-700"
+                                )}
+                              >
+                                {row.status}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
       </div>
     </div>
   );
 }
-
