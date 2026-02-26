@@ -480,7 +480,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="xl:col-span-3 overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+          <Card className="xl:col-span-5 overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
             <CardHeader className="pb-2 pt-6 px-6">
               <CardTitle className="text-base font-semibold text-neutral-900">Orders by Status</CardTitle>
               <CardDescription className="text-neutral-500">Shipped, pending, processing, rejected</CardDescription>
@@ -499,13 +499,16 @@ export default function DashboardPage() {
               </ChartContainer>
             </CardContent>
           </Card>
+        </section>
 
-          <Card className="xl:col-span-2 xl:row-span-2 flex flex-col overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+        {/* Alerts — separate section after graph and donut */}
+        <section>
+          <Card className="overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
             <CardHeader className="pb-2 pt-6 px-6">
               <CardTitle className="text-base font-semibold text-neutral-900">Alerts</CardTitle>
               <CardDescription className="text-neutral-500">Needs attention</CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 px-6 pb-6">
+            <CardContent className="px-6 pb-6">
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0 rounded-lg border border-amber-200/80 bg-amber-50/60 p-3">
                   <p className="text-sm font-medium text-amber-900">Low Stock ({lowStockItems.length})</p>
