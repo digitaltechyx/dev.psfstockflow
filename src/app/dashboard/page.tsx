@@ -547,14 +547,14 @@ export default function DashboardPage() {
         </section>
 
         {/* Source split bar chart + Top moving products */}
-        <section className="grid gap-6 xl:grid-cols-12">
-          <Card className="xl:col-span-5 overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
-            <CardHeader className="pb-2 pt-6 px-6">
+        <section className="grid gap-6 xl:grid-cols-12 xl:items-stretch">
+          <Card className="xl:col-span-5 flex flex-col overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm xl:min-h-0">
+            <CardHeader className="pb-2 pt-6 px-6 shrink-0">
               <CardTitle className="text-base font-semibold text-neutral-900">Source Split</CardTitle>
               <CardDescription className="text-neutral-500">Inventory by channel</CardDescription>
             </CardHeader>
-            <CardContent className="px-6 pb-6">
-              <ChartContainer config={sourceSplitChartConfig} className="h-[260px] w-full">
+            <CardContent className="flex flex-1 flex-col min-h-0 px-6 pb-6">
+              <ChartContainer config={sourceSplitChartConfig} className="min-h-[260px] w-full flex-1">
                 <BarChart data={sourceSplitData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgb(229 231 235)" />
                   <XAxis dataKey="source" tickLine={false} axisLine={false} tickMargin={8} />
@@ -566,12 +566,12 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="xl:col-span-7 overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
-            <CardHeader className="pb-2 pt-6 px-6">
+          <Card className="xl:col-span-7 flex flex-col overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm xl:min-h-0">
+            <CardHeader className="pb-2 pt-6 px-6 shrink-0">
               <CardTitle className="text-base font-semibold text-neutral-900">Top Moving Products</CardTitle>
               <CardDescription className="text-neutral-500">Highest shipped volume</CardDescription>
             </CardHeader>
-            <CardContent className="px-6 pb-6">
+            <CardContent className="flex flex-1 flex-col min-h-0 px-6 pb-6">
               {shippedLoading || inventoryLoading ? (
                 <Skeleton className="h-40 w-full rounded-lg" />
               ) : (
