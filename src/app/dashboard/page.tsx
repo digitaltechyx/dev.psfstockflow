@@ -32,6 +32,7 @@ import { useRouter } from "next/navigation";
 import { hasRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useDashboardNav } from "@/contexts/dashboard-nav-context";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import {
   ChartContainer,
   ChartTooltip,
@@ -454,6 +455,20 @@ export default function DashboardPage() {
             );
           })}
         </section>
+
+        {/* Date picker - filter analytics by range */}
+        {nav && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-neutral-600">Date range:</span>
+            <DateRangePicker
+              fromDate={nav.dateRangeFrom}
+              toDate={nav.dateRangeTo}
+              setFromDate={nav.setDateRangeFrom}
+              setToDate={nav.setDateRangeTo}
+              className="h-9 w-full min-w-[240px] border-neutral-200 bg-white text-sm shadow-[0_1px_2px_rgba(0,0,0,0.05)] sm:w-[280px]"
+            />
+          </div>
+        )}
 
         {/* Analytics: Line chart + Donut */}
         <section className="grid gap-6 xl:grid-cols-12">
