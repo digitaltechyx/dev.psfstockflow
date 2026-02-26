@@ -344,6 +344,11 @@ export default function DashboardPage() {
     pending: { label: "Pending", color: "#f59e0b" },
     processing: { label: "Processing", color: "#3b82f6" },
     rejected: { label: "Rejected", color: "#ef4444" },
+    // Capitalized for legend lookup (Pie sends name: "Shipped" etc.)
+    Shipped: { label: "Shipped", color: "#22c55e" },
+    Pending: { label: "Pending", color: "#f59e0b" },
+    Processing: { label: "Processing", color: "#3b82f6" },
+    Rejected: { label: "Rejected", color: "#ef4444" },
   } satisfies ChartConfig;
 
   const sourceSplitChartConfig = {
@@ -523,7 +528,7 @@ export default function DashboardPage() {
               <ChartContainer config={orderStatusChartConfig} className="h-[280px] w-full">
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent />} />
+                  <ChartLegend content={<ChartLegendContent nameKey="name" />} />
                   <Pie data={orderStatusData} dataKey="value" nameKey="name" innerRadius={56} outerRadius={88} paddingAngle={2}>
                     {orderStatusData.map((entry) => (
                       <Cell key={entry.name} fill={entry.fill} />
