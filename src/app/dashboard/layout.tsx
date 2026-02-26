@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { ProfileDialog } from "@/components/dashboard/profile-dialog";
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { DashboardNavProvider } from "@/contexts/dashboard-nav-context";
 import { hasRole, getUserRoles } from "@/lib/permissions";
 import {
   SidebarProvider,
@@ -130,10 +131,11 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <DashboardSidebar />
-        <SidebarInset className="flex flex-col flex-1 min-w-0 overflow-x-hidden">
-          <DashboardHeader onProfileClick={handleProfileClick} />
+      <DashboardNavProvider>
+        <div className="flex min-h-screen w-full">
+          <DashboardSidebar />
+          <SidebarInset className="flex flex-col flex-1 min-w-0 overflow-x-hidden">
+            <DashboardHeader onProfileClick={handleProfileClick} />
           <ProfileDialog open={showProfile} onOpenChange={setShowProfile} />
           <main className="flex flex-1 flex-col gap-4 sm:gap-6 p-4 sm:p-6 lg:p-8 overflow-auto overflow-x-hidden w-full min-w-0 max-w-full">
             <div className="w-full min-w-0 max-w-full">
@@ -141,7 +143,8 @@ export default function DashboardLayout({
             </div>
           </main>
         </SidebarInset>
-      </div>
+        </div>
+      </DashboardNavProvider>
     </SidebarProvider>
   );
 }

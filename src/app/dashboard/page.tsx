@@ -7,15 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -33,15 +25,13 @@ import {
   RefreshCw,
   CheckCircle2,
   PlugZap,
-  Search,
-  Filter,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { hasRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { useDashboardNav } from "@/contexts/dashboard-nav-context";
 import {
   ChartContainer,
   ChartTooltip,
@@ -116,14 +106,11 @@ function normalizeRequestDate(
 export default function DashboardPage() {
   const { userProfile } = useAuth();
   const router = useRouter();
+  const nav = useDashboardNav();
   const [trendRange, setTrendRange] = useState<7 | 14 | 30>(14);
-  const [dateRangeFrom, setDateRangeFrom] = useState<Date | undefined>(() => {
-    const d = new Date();
-    d.setDate(1);
-    return d;
-  });
-  const [dateRangeTo, setDateRangeTo] = useState<Date | undefined>(() => new Date());
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const dateRangeFrom = nav?.dateRangeFrom;
+  const dateRangeTo = nav?.dateRangeTo;
+  const sourceFilter = nav?.sourceFilter ?? "all";
 
   useEffect(() => {
     if (userProfile && hasRole(userProfile, "commission_agent") && !hasRole(userProfile, "user")) {
@@ -393,37 +380,9 @@ export default function DashboardPage() {
   return (
     <div className="min-h-full bg-neutral-50/80">
       <div className="mx-auto max-w-[1600px] space-y-8 px-4 py-6 md:px-6">
-        {/* Page title + compact toolbar (single app header stays in layout) */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-neutral-900 sm:text-2xl">Dashboard</h1>
-            <p className="text-sm text-neutral-500">3PL operations overview</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <DateRangePicker
-              fromDate={dateRangeFrom}
-              toDate={dateRangeTo}
-              setFromDate={setDateRangeFrom}
-              setToDate={setDateRangeTo}
-              className="h-9 w-[240px] border-neutral-200 bg-white text-sm shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-            />
-            <Select value={sourceFilter} onValueChange={setSourceFilter}>
-              <SelectTrigger className="h-9 w-[140px] border-neutral-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                <Filter className="mr-1.5 h-4 w-4 text-neutral-400" />
-                <SelectValue placeholder="Source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All sources</SelectItem>
-                <SelectItem value="shopify">Shopify</SelectItem>
-                <SelectItem value="ebay">eBay</SelectItem>
-                <SelectItem value="manual">Manual</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="relative w-[160px] sm:w-[180px]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-              <Input className="h-9 border-neutral-200 bg-white pl-9 text-sm placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.05)]" placeholder="Search..." />
-            </div>
-          </div>
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-neutral-900 sm:text-2xl">Dashboard</h1>
+          <p className="text-sm text-neutral-500">3PL operations overview</p>
         </div>
 
         {/* KPI cards - soft shadows, rounded-xl */}

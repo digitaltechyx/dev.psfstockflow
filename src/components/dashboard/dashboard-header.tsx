@@ -1,13 +1,20 @@
 "use client";
 
-import { LogOut, User as UserIcon } from "lucide-react";
+import { LogOut, User as UserIcon, Search, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import {
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useDashboardNav } from "@/contexts/dashboard-nav-context";
 
 interface DashboardHeaderProps {
   onProfileClick?: () => void;
@@ -24,6 +32,7 @@ interface DashboardHeaderProps {
 export function DashboardHeader({ onProfileClick }: DashboardHeaderProps) {
   const { signOut, userProfile } = useAuth();
   const router = useRouter();
+  const nav = useDashboardNav();
 
   const handleSignOut = async () => {
     await signOut();
@@ -34,49 +43,82 @@ export function DashboardHeader({ onProfileClick }: DashboardHeaderProps) {
     if (onProfileClick) {
       onProfileClick();
     } else {
-      window.dispatchEvent(new Event('toggle-profile'));
+      window.dispatchEvent(new Event("toggle-profile"));
     }
   };
-  
+
   const getInitials = (name?: string | null) => {
     if (!name) return "U";
-    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-  }
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase();
+  };
 
   const getAvatarSrc = () => {
     if (userProfile?.profilePictureUrl) {
       return userProfile.profilePictureUrl;
     }
-
     if (userProfile?.email) {
-      return `https://avatar.vercel.sh/${encodeURIComponent(
-        userProfile.email
-      )}.png`;
+      return `https://avatar.vercel.sh/${encodeURIComponent(userProfile.email)}.png`;
     }
-
     return undefined;
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-4 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 lg:px-6">
-      <SidebarTrigger className="-ml-1" />
-      
-      <div className="flex flex-1 items-center justify-end gap-4">
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex flex-col items-end">
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border/40 bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:gap-4 sm:px-4 lg:px-6">
+      <SidebarTrigger className="-ml-1 shrink-0" />
+
+      <div className="flex flex-1 items-center justify-between gap-2 overflow-hidden sm:justify-end sm:gap-4">
+        {/* Filters + date + search (one top bar) */}
+        {nav && (
+          <div className="flex flex-1 flex-wrap items-center gap-2 sm:flex-initial sm:flex-nowrap">
+            <DateRangePicker
+              fromDate={nav.dateRangeFrom}
+              toDate={nav.dateRangeTo}
+              setFromDate={nav.setDateRangeFrom}
+              setToDate={nav.setDateRangeTo}
+              className="h-9 w-full min-w-0 border-border bg-background text-sm sm:w-[220px]"
+            />
+            <Select value={nav.sourceFilter} onValueChange={nav.setSourceFilter}>
+              <SelectTrigger className="h-9 w-[120px] shrink-0 border-border bg-background sm:w-[130px]">
+                <Filter className="mr-1.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <SelectValue placeholder="Source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All sources</SelectItem>
+                <SelectItem value="shopify">Shopify</SelectItem>
+                <SelectItem value="ebay">eBay</SelectItem>
+                <SelectItem value="manual">Manual</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="relative hidden w-[140px] shrink-0 sm:block md:w-[160px]">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="h-9 border-border bg-background pl-8 text-sm"
+                placeholder="Search..."
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="hidden flex-col items-end sm:flex">
             <span className="text-sm font-medium">{userProfile?.name}</span>
             <span className="text-xs text-muted-foreground">User</span>
           </div>
-          
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                <Avatar className="h-10 w-10 border-2 border-border">
-                  <AvatarImage 
+              <Button variant="ghost" className="relative h-9 w-9 rounded-full sm:h-10 sm:w-10">
+                <Avatar className="h-9 w-9 border-2 border-border sm:h-10 sm:w-10">
+                  <AvatarImage
                     src={getAvatarSrc()}
-                    alt={userProfile?.name || 'User'} 
+                    alt={userProfile?.name || "User"}
                   />
-                  <AvatarFallback className="text-sm font-semibold bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-sm font-semibold text-white">
                     {getInitials(userProfile?.name)}
                   </AvatarFallback>
                 </Avatar>
@@ -97,7 +139,10 @@ export function DashboardHeader({ onProfileClick }: DashboardHeaderProps) {
                 <span>Profile</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-red-600 focus:text-red-600">
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="cursor-pointer text-red-600 focus:text-red-600"
+              >
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>
               </DropdownMenuItem>
@@ -108,4 +153,3 @@ export function DashboardHeader({ onProfileClick }: DashboardHeaderProps) {
     </header>
   );
 }
-
