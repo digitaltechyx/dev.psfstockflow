@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +14,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useDashboardNav } from "@/contexts/dashboard-nav-context";
 
 interface DashboardHeaderProps {
   onProfileClick?: () => void;
@@ -24,7 +22,6 @@ interface DashboardHeaderProps {
 export function DashboardHeader({ onProfileClick }: DashboardHeaderProps) {
   const { signOut, userProfile } = useAuth();
   const router = useRouter();
-  const nav = useDashboardNav();
 
   const handleSignOut = async () => {
     await signOut();
@@ -64,19 +61,6 @@ export function DashboardHeader({ onProfileClick }: DashboardHeaderProps) {
       <SidebarTrigger className="-ml-1 shrink-0" />
 
       <div className="flex flex-1 items-center justify-between gap-2 overflow-hidden sm:justify-end sm:gap-4">
-        {/* Date range only */}
-        {nav && (
-          <div className="flex flex-1 flex-wrap items-center gap-2 sm:flex-initial sm:flex-nowrap">
-            <DateRangePicker
-              fromDate={nav.dateRangeFrom}
-              toDate={nav.dateRangeTo}
-              setFromDate={nav.setDateRangeFrom}
-              setToDate={nav.setDateRangeTo}
-              className="h-9 w-full min-w-0 border-border bg-background text-sm sm:w-[220px]"
-            />
-          </div>
-        )}
-
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="hidden flex-col items-end sm:flex">
             <span className="text-sm font-medium">{userProfile?.name}</span>

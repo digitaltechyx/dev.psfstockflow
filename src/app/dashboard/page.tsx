@@ -517,12 +517,13 @@ export default function DashboardPage() {
           <Card className="xl:col-span-3 overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
             <CardHeader className="pb-2 pt-6 px-6">
               <CardTitle className="text-base font-semibold text-neutral-900">Orders by Status</CardTitle>
-              <CardDescription className="text-neutral-500">Shipped, pending, processing</CardDescription>
+              <CardDescription className="text-neutral-500">Shipped, pending, processing, rejected</CardDescription>
             </CardHeader>
             <CardContent className="px-6 pb-6">
               <ChartContainer config={orderStatusChartConfig} className="h-[280px] w-full">
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
                   <Pie data={orderStatusData} dataKey="value" nameKey="name" innerRadius={56} outerRadius={88} paddingAngle={2}>
                     {orderStatusData.map((entry) => (
                       <Cell key={entry.name} fill={entry.fill} />
