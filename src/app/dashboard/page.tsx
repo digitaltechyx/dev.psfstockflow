@@ -245,11 +245,17 @@ export default function DashboardPage() {
 
   const sourceSplit = useMemo(() => {
     const rows = inventoryData as InventoryItemWithSource[];
-    const shopify = rows.filter((r) => r.source === "shopify").length;
-    const ebay = rows.filter((r) => r.source === "ebay").length;
-    const manual = rows.length - shopify - ebay;
+    const filtered =
+      hasDateRange && dateRangeFrom && dateRangeTo
+        ? rows.filter((r) =>
+            isDateInRange(normalizeInventoryDate(r.dateAdded), dateRangeFrom, dateRangeTo)
+          )
+        : rows;
+    const shopify = filtered.filter((r) => r.source === "shopify").length;
+    const ebay = filtered.filter((r) => r.source === "ebay").length;
+    const manual = filtered.length - shopify - ebay;
     return { shopify, ebay, manual };
-  }, [inventoryData]);
+  }, [inventoryData, hasDateRange, dateRangeFrom, dateRangeTo]);
 
   const inventoryAndShipmentTrend = useMemo(() => {
     const buckets = new Map<string, { label: string; shipped: number; added: number }>();
@@ -551,7 +557,9 @@ export default function DashboardPage() {
           <Card className="xl:col-span-5 flex flex-col overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm xl:min-h-0">
             <CardHeader className="pb-2 pt-6 px-6 shrink-0">
               <CardTitle className="text-base font-semibold text-neutral-900">Source Split</CardTitle>
-              <CardDescription className="text-neutral-500">Inventory by channel</CardDescription>
+              <CardDescription className="text-neutral-500">
+                {hasDateRange ? "Inventory added in selected range by channel" : "Inventory by channel"}
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-1 flex-col min-h-0 px-6 pb-6">
               <ChartContainer config={sourceSplitChartConfig} className="min-h-[260px] w-full flex-1">
