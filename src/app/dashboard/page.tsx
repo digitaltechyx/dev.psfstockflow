@@ -506,8 +506,8 @@ export default function DashboardPage() {
               <CardDescription className="text-neutral-500">Needs attention</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 px-6 pb-6">
-              <div className="flex flex-wrap gap-3">
-                <div className="min-w-[140px] flex-1 rounded-lg border border-amber-200/80 bg-amber-50/60 p-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="min-w-0 rounded-lg border border-amber-200/80 bg-amber-50/60 p-3">
                   <p className="text-sm font-medium text-amber-900">Low Stock ({lowStockItems.length})</p>
                   {lowStockItems.length === 0 ? (
                     <p className="mt-1 text-xs text-amber-700">All good</p>
@@ -517,7 +517,7 @@ export default function DashboardPage() {
                     ))
                   )}
                 </div>
-                <div className="min-w-[140px] flex-1 rounded-lg border border-rose-200/80 bg-rose-50/60 p-3">
+                <div className="min-w-0 rounded-lg border border-rose-200/80 bg-rose-50/60 p-3">
                   <p className="text-sm font-medium text-rose-900">Rejected Requests ({rejectedInventoryRequests.length})</p>
                   {rejectedInventoryRequests.length === 0 ? (
                     <p className="mt-1 text-xs text-rose-700">None</p>
@@ -527,12 +527,12 @@ export default function DashboardPage() {
                     ))
                   )}
                 </div>
-                <div className="min-w-[140px] flex-1 rounded-lg border border-blue-200/80 bg-blue-50/60 p-3">
+                <div className="min-w-0 rounded-lg border border-blue-200/80 bg-blue-50/60 p-3">
                   <p className="text-sm font-medium text-blue-900">Pending Fulfillment ({pendingFulfillmentCount})</p>
                   <p className="mt-1 text-xs text-blue-700">Shipment requests waiting</p>
                   <Link href="/dashboard/shipped-orders" className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline">Review →</Link>
                 </div>
-                <div className="min-w-[140px] flex-1 rounded-lg border border-emerald-200/80 bg-emerald-50/60 p-3">
+                <div className="min-w-0 rounded-lg border border-emerald-200/80 bg-emerald-50/60 p-3">
                   <p className="text-sm font-medium text-emerald-900">Integrations</p>
                   <p className="mt-1 text-xs text-emerald-800">Shopify: {shopifyConnections.length > 0 ? "Connected" : "Not connected"}</p>
                   <p className="text-xs text-emerald-800">eBay: {ebayConnections.length > 0 ? "Connected" : "Not connected"}</p>
