@@ -380,11 +380,6 @@ export default function DashboardPage() {
   return (
     <div className="min-h-full bg-neutral-50/80">
       <div className="mx-auto max-w-[1600px] space-y-8 px-4 py-6 md:px-6">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-neutral-900 sm:text-2xl">Dashboard</h1>
-          <p className="text-sm text-neutral-500">3PL operations overview</p>
-        </div>
-
         {/* KPI cards - soft shadows, rounded-xl */}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {kpiCards.map((kpi) => {
