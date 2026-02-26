@@ -32,6 +32,7 @@ import {
   ShoppingCart,
   RotateCcw,
   Package,
+  Boxes,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useCollection } from "@/hooks/use-collection";
@@ -227,6 +228,13 @@ export function AdminSidebar() {
       url: "/admin/dashboard",
       icon: LayoutDashboard,
       color: "text-blue-600",
+      requiredFeature: "admin_dashboard" as const,
+    },
+    {
+      title: "Inventory Management",
+      url: "/admin/dashboard/inventory-management",
+      icon: Boxes,
+      color: "text-violet-600",
       requiredFeature: "admin_dashboard" as const,
     },
     {
