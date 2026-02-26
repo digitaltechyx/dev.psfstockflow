@@ -268,15 +268,17 @@ export default function AdminDashboardPage() {
 
   const [chartData, setChartData] = useState<{
     trend: Array<{ label: string; shipped: number; added: number }>;
+    requestTrend: Array<{ label: string; total: number }>;
     requestTypes: Array<{ type: string; count: number; fill: string }>;
     statusDonut: Array<{ name: string; value: number; fill: string }>;
+    topUsers: Array<{ user: string; count: number; fill: string }>;
     recentActivity: Array<{ id: string; type: string; userName: string; date: string; status: string }>;
-  }>({ trend: [], requestTypes: [], statusDonut: [], recentActivity: [] });
+  }>({ trend: [], requestTrend: [], requestTypes: [], statusDonut: [], topUsers: [], recentActivity: [] });
   const [chartLoading, setChartLoading] = useState(true);
 
   useEffect(() => {
     if (!adminUser?.uid || !users?.length) {
-      setChartData({ trend: [], requestTypes: [], statusDonut: [], recentActivity: [] });
+      setChartData({ trend: [], requestTrend: [], requestTypes: [], statusDonut: [], topUsers: [], recentActivity: [] });
       setChartLoading(false);
       return;
     }
@@ -288,6 +290,7 @@ export default function AdminDashboardPage() {
       setChartLoading(true);
       try {
         const buckets = new Map<string, { label: string; shipped: number; added: number }>();
+        const requestBuckets = new Map<string, { label: string; total: number }>();
         for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
           const d = new Date(t);
           const key = d.toISOString().slice(0, 10);
@@ -296,10 +299,15 @@ export default function AdminDashboardPage() {
             shipped: 0,
             added: 0,
           });
+          requestBuckets.set(key, {
+            label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            total: 0,
+          });
         }
 
         const requestTypeCounts = { Shipment: 0, Inventory: 0, Returns: 0, Dispose: 0 };
         const statusCounts = { Pending: 0, Processing: 0, Shipped: 0, Rejected: 0 };
+        const userRequestCounts = new Map<string, number>();
         let shippedOrderCount = 0;
         const recentList: Array<{ id: string; type: string; userName: string; date: string; status: string; ms: number }> = [];
 
@@ -347,7 +355,13 @@ export default function AdminDashboardPage() {
               else if (status === "rejected") statusCounts.Rejected += 1;
               else if (["approved", "in_progress", "confirmed", "shipped"].includes(status)) statusCounts.Processing += 1;
               const ms = toMs(data?.requestedAt || data?.date);
-              if (isDateInRange(new Date(ms), start, end)) recentList.push({ id: doc.id, type: "Shipment", userName, date: new Date(ms).toLocaleDateString(), status: data?.status || "—", ms });
+              if (isDateInRange(new Date(ms), start, end)) {
+                recentList.push({ id: doc.id, type: "Shipment", userName, date: new Date(ms).toLocaleDateString(), status: data?.status || "—", ms });
+                const key = new Date(ms).toISOString().slice(0, 10);
+                const bucket = requestBuckets.get(key);
+                if (bucket) bucket.total += 1;
+                userRequestCounts.set(userName, (userRequestCounts.get(userName) || 0) + 1);
+              }
             });
             invReqSnap.docs.forEach((doc) => {
               const data = doc.data() as RequestDoc;
@@ -357,7 +371,13 @@ export default function AdminDashboardPage() {
               else if (status === "rejected") statusCounts.Rejected += 1;
               else statusCounts.Processing += 1;
               const ms = toMs(data?.requestedAt || data?.date);
-              if (isDateInRange(new Date(ms), start, end)) recentList.push({ id: doc.id, type: "Inventory", userName, date: new Date(ms).toLocaleDateString(), status: data?.status || "—", ms });
+              if (isDateInRange(new Date(ms), start, end)) {
+                recentList.push({ id: doc.id, type: "Inventory", userName, date: new Date(ms).toLocaleDateString(), status: data?.status || "—", ms });
+                const key = new Date(ms).toISOString().slice(0, 10);
+                const bucket = requestBuckets.get(key);
+                if (bucket) bucket.total += 1;
+                userRequestCounts.set(userName, (userRequestCounts.get(userName) || 0) + 1);
+              }
             });
             returnsSnap.docs.forEach((doc) => {
               requestTypeCounts.Returns += 1;
@@ -366,6 +386,13 @@ export default function AdminDashboardPage() {
               if (status === "pending") statusCounts.Pending += 1;
               else if (status === "rejected") statusCounts.Rejected += 1;
               else statusCounts.Processing += 1;
+              const ms = toMs(data?.requestedAt || data?.date);
+              if (isDateInRange(new Date(ms), start, end)) {
+                const key = new Date(ms).toISOString().slice(0, 10);
+                const bucket = requestBuckets.get(key);
+                if (bucket) bucket.total += 1;
+                userRequestCounts.set(userName, (userRequestCounts.get(userName) || 0) + 1);
+              }
             });
             disposeSnap.docs.forEach((doc) => {
               requestTypeCounts.Dispose += 1;
@@ -374,6 +401,13 @@ export default function AdminDashboardPage() {
               if (status === "pending") statusCounts.Pending += 1;
               else if (status === "rejected") statusCounts.Rejected += 1;
               else statusCounts.Processing += 1;
+              const ms = toMs(data?.requestedAt || data?.date);
+              if (isDateInRange(new Date(ms), start, end)) {
+                const key = new Date(ms).toISOString().slice(0, 10);
+                const bucket = requestBuckets.get(key);
+                if (bucket) bucket.total += 1;
+                userRequestCounts.set(userName, (userRequestCounts.get(userName) || 0) + 1);
+              }
             });
           } catch {
             // skip user
@@ -383,6 +417,7 @@ export default function AdminDashboardPage() {
         statusCounts.Shipped = shippedOrderCount;
 
         const trend = Array.from(buckets.values());
+        const requestTrend = Array.from(requestBuckets.values());
         const requestTypes = [
           { type: "Shipment", count: requestTypeCounts.Shipment, fill: "var(--color-shipment)" },
           { type: "Inventory", count: requestTypeCounts.Inventory, fill: "var(--color-inventory)" },
@@ -390,18 +425,36 @@ export default function AdminDashboardPage() {
           { type: "Dispose", count: requestTypeCounts.Dispose, fill: "var(--color-dispose)" },
         ];
         const statusDonut = [
-          { name: "Pending", value: statusCounts.Pending, fill: "var(--color-pending)" },
-          { name: "Processing", value: statusCounts.Processing, fill: "var(--color-processing)" },
-          { name: "Shipped", value: statusCounts.Shipped, fill: "var(--color-shipped)" },
-          { name: "Rejected", value: statusCounts.Rejected, fill: "var(--color-rejected)" },
+          { name: "Pending", value: statusCounts.Pending, fill: "#f59e0b" },
+          { name: "Processing", value: statusCounts.Processing, fill: "#3b82f6" },
+          { name: "Shipped", value: statusCounts.Shipped, fill: "#22c55e" },
+          { name: "Rejected", value: statusCounts.Rejected, fill: "#ef4444" },
         ].filter((d) => d.value > 0);
+        const topUsers = Array.from(userRequestCounts.entries())
+          .map(([user, count]) => ({ user, count, fill: "#06b6d4" }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 6);
 
         recentList.sort((a, b) => b.ms - a.ms);
         const recentActivity = recentList.slice(0, 10).map(({ id, type, userName, date, status }) => ({ id, type, userName, date, status }));
 
-        setChartData({ trend, requestTypes, statusDonut: statusDonut.length ? statusDonut : [{ name: "No data", value: 1, fill: "#94a3b8" }], recentActivity });
+        setChartData({
+          trend,
+          requestTrend,
+          requestTypes,
+          statusDonut: statusDonut.length ? statusDonut : [{ name: "No data", value: 1, fill: "#94a3b8" }],
+          topUsers,
+          recentActivity,
+        });
       } catch {
-        setChartData({ trend: [], requestTypes: [], statusDonut: [{ name: "No data", value: 1, fill: "#94a3b8" }], recentActivity: [] });
+        setChartData({
+          trend: [],
+          requestTrend: [],
+          requestTypes: [],
+          statusDonut: [{ name: "No data", value: 1, fill: "#94a3b8" }],
+          topUsers: [],
+          recentActivity: [],
+        });
       } finally {
         setChartLoading(false);
       }
@@ -420,10 +473,20 @@ export default function AdminDashboardPage() {
     dispose: { label: "Dispose", color: "#7c3aed" },
   } satisfies ChartConfig;
   const statusChartConfig = {
+    pending: { label: "Pending", color: "#f59e0b" },
+    processing: { label: "Processing", color: "#3b82f6" },
+    shipped: { label: "Shipped", color: "#22c55e" },
+    rejected: { label: "Rejected", color: "#ef4444" },
     Pending: { label: "Pending", color: "#f59e0b" },
     Processing: { label: "Processing", color: "#3b82f6" },
     Shipped: { label: "Shipped", color: "#22c55e" },
     Rejected: { label: "Rejected", color: "#ef4444" },
+  } satisfies ChartConfig;
+  const requestTrendConfig = {
+    total: { label: "Requests", color: "#8b5cf6" },
+  } satisfies ChartConfig;
+  const topUsersConfig = {
+    count: { label: "Requests", color: "#06b6d4" },
   } satisfies ChartConfig;
 
   const kpiCards = [
@@ -500,7 +563,7 @@ export default function AdminDashboardPage() {
           })}
         </section>
 
-        {/* Charts row 1: Trend (area) + Request types (bar) */}
+        {/* Charts row 1: Trend + Status donut */}
         <section className="grid gap-6 lg:grid-cols-12">
           <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-8">
             <CardHeader className="pb-2 pt-6 px-6">
@@ -537,43 +600,6 @@ export default function AdminDashboardPage() {
           <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-4">
             <CardHeader className="pb-2 pt-6 px-6">
               <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
-                  <BarChart3 className="h-4 w-4" />
-                </div>
-                <div>
-                  <CardTitle className="text-base font-semibold text-slate-900">Requests by type</CardTitle>
-                  <CardDescription className="text-slate-500">Across all users</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="px-6 pb-6">
-              {chartLoading ? (
-                <Skeleton className="h-[280px] w-full rounded-lg" />
-              ) : (
-                <ChartContainer config={requestTypesChartConfig} className="h-[280px] w-full">
-                  <BarChart data={chartData.requestTypes} layout="vertical" margin={{ left: 12, right: 12 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgb(226 232 240)" />
-                    <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} />
-                    <YAxis type="category" dataKey="type" tickLine={false} axisLine={false} width={72} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <ChartLegend content={<ChartLegendContent />} />
-                    <Bar dataKey="count" nameKey="type" radius={[0, 4, 4, 0]}>
-                      {chartData.requestTypes.map((entry, i) => (
-                        <Cell key={`cell-${i}`} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ChartContainer>
-              )}
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Charts row 2: Status donut + Recent activity table */}
-        <section className="grid gap-6 lg:grid-cols-12">
-          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-4">
-            <CardHeader className="pb-2 pt-6 px-6">
-              <div className="flex items-center gap-2">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600">
                   <PieChartIcon className="h-4 w-4" />
                 </div>
@@ -585,13 +611,13 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent className="px-6 pb-6">
               {chartLoading ? (
-                <Skeleton className="h-[260px] w-full rounded-lg" />
+                <Skeleton className="h-[280px] w-full rounded-lg" />
               ) : (
-                <ChartContainer config={statusChartConfig} className="h-[260px] w-full">
+                <ChartContainer config={statusChartConfig} className="h-[280px] w-full">
                   <PieChart>
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <ChartLegend content={<ChartLegendContent nameKey="name" className="grid grid-cols-2 gap-x-4 gap-y-2 justify-items-start" />} />
-                    <Pie data={chartData.statusDonut} dataKey="value" nameKey="name" innerRadius={56} outerRadius={80} paddingAngle={2}>
+                    <Pie data={chartData.statusDonut} dataKey="value" nameKey="name" innerRadius={58} outerRadius={86} paddingAngle={2}>
                       {chartData.statusDonut.map((entry, i) => (
                         <Cell key={`cell-${i}`} fill={entry.fill} />
                       ))}
@@ -601,8 +627,102 @@ export default function AdminDashboardPage() {
               )}
             </CardContent>
           </Card>
+        </section>
 
-          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-8">
+        {/* Charts row 2: Requests trend + Top users by activity */}
+        <section className="grid gap-6 lg:grid-cols-12">
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-6">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-fuchsia-500/10 text-fuchsia-600">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Request volume over time</CardTitle>
+                  <CardDescription className="text-slate-500">Daily request activity</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              {chartLoading ? (
+                <Skeleton className="h-[260px] w-full rounded-lg" />
+              ) : (
+                <ChartContainer config={requestTrendConfig} className="h-[260px] w-full">
+                  <AreaChart data={chartData.requestTrend}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgb(226 232 240)" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <Area dataKey="total" type="monotone" fill="var(--color-total)" fillOpacity={0.22} stroke="var(--color-total)" strokeWidth={2} />
+                  </AreaChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-6">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <CardTitle className="text-base font-semibold text-slate-900">Top users by request volume</CardTitle>
+              <CardDescription className="text-slate-500">Most active users in selected period</CardDescription>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              {chartLoading ? (
+                <Skeleton className="h-[260px] w-full rounded-lg" />
+              ) : (
+                <ChartContainer config={topUsersConfig} className="h-[260px] w-full">
+                  <BarChart data={chartData.topUsers} layout="vertical" margin={{ left: 8, right: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgb(226 232 240)" />
+                    <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} />
+                    <YAxis type="category" dataKey="user" tickLine={false} axisLine={false} width={92} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="count" radius={[0, 6, 6, 0]} fill="var(--color-count)" />
+                  </BarChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Separate section: Requests by type */}
+        <section className="grid gap-6 lg:grid-cols-12">
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-12">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
+                  <BarChart3 className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Requests by type</CardTitle>
+                  <CardDescription className="text-slate-500">Separate analytics section across all users</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              {chartLoading ? (
+                <Skeleton className="h-[260px] w-full rounded-lg" />
+              ) : (
+                <ChartContainer config={requestTypesChartConfig} className="h-[260px] w-full">
+                  <BarChart data={chartData.requestTypes} layout="vertical" margin={{ left: 18, right: 18 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgb(226 232 240)" />
+                    <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} />
+                    <YAxis type="category" dataKey="type" tickLine={false} axisLine={false} width={84} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <Bar dataKey="count" nameKey="type" radius={[0, 6, 6, 0]}>
+                      {chartData.requestTypes.map((entry, i) => (
+                        <Cell key={`type-cell-${i}`} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Recent activity table */}
+        <section className="grid gap-6 lg:grid-cols-12">
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-12">
             <CardHeader className="pb-2 pt-6 px-6">
               <CardTitle className="text-base font-semibold text-slate-900">Recent activity</CardTitle>
               <CardDescription className="text-slate-500">Latest requests in selected period</CardDescription>
