@@ -103,6 +103,21 @@ function normalizeRequestDate(
   return null;
 }
 
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function endOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+}
+function isDateInRange(date: Date | null, from?: Date, to?: Date): boolean {
+  if (!date) return false;
+  if (!from && !to) return true;
+  const t = date.getTime();
+  if (from && t < startOfDay(from).getTime()) return false;
+  if (to && t > endOfDay(to).getTime()) return false;
+  return true;
+}
+
 export default function DashboardPage() {
   const { userProfile } = useAuth();
   const router = useRouter();
@@ -149,6 +164,20 @@ export default function DashboardPage() {
     userProfile ? `users/${userProfile.uid}/ebayConnections` : ""
   );
 
+  const hasDateRange = Boolean(dateRangeFrom && dateRangeTo);
+
+  const shippedDataInRange = useMemo(() => {
+    if (!hasDateRange) return shippedData;
+    return shippedData.filter((row) => isDateInRange(normalizeDate(row.date), dateRangeFrom, dateRangeTo));
+  }, [shippedData, hasDateRange, dateRangeFrom, dateRangeTo]);
+
+  const shipmentRequestsInRange = useMemo(() => {
+    if (!hasDateRange) return shipmentRequests;
+    return shipmentRequests.filter((req) =>
+      isDateInRange(normalizeRequestDate(req.requestedAt || req.date), dateRangeFrom, dateRangeTo)
+    );
+  }, [shipmentRequests, hasDateRange, dateRangeFrom, dateRangeTo]);
+
   const totalItemsInInventory = useMemo(() => {
     return inventoryData.reduce((sum, item) => sum + (item.quantity || 0), 0);
   }, [inventoryData]);
@@ -194,6 +223,7 @@ export default function DashboardPage() {
   }, []);
 
   const todaysShippedOrders = useMemo(() => {
+    if (hasDateRange) return shippedDataInRange.length;
     return shippedData.filter((item) => {
       const itemDate = normalizeDate(item.date);
       if (!itemDate) return false;
@@ -203,7 +233,7 @@ export default function DashboardPage() {
       )}-${String(itemDate.getDate()).padStart(2, "0")}`;
       return itemDateString === currentDate;
     }).length;
-  }, [shippedData, currentDate]);
+  }, [shippedData, currentDate, hasDateRange, shippedDataInRange.length]);
 
   const integrationHealth = useMemo(() => {
     const hasShopify = shopifyConnections.length > 0;
@@ -222,19 +252,30 @@ export default function DashboardPage() {
   }, [inventoryData]);
 
   const inventoryAndShipmentTrend = useMemo(() => {
-    const days = trendRange;
-    const now = new Date();
     const buckets = new Map<string, { label: string; shipped: number; added: number }>();
 
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
-      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      buckets.set(key, { label, shipped: 0, added: 0 });
+    if (hasDateRange && dateRangeFrom && dateRangeTo) {
+      const start = startOfDay(dateRangeFrom);
+      const end = endOfDay(dateRangeTo);
+      for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
+        const d = new Date(t);
+        const key = d.toISOString().slice(0, 10);
+        const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        buckets.set(key, { label, shipped: 0, added: 0 });
+      }
+    } else {
+      const days = trendRange;
+      const now = new Date();
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        buckets.set(key, { label, shipped: 0, added: 0 });
+      }
     }
 
-    for (const row of shippedData) {
+    for (const row of shippedDataInRange) {
       const d = normalizeDate(row.date);
       if (!d) continue;
       const key = d.toISOString().slice(0, 10);
@@ -243,7 +284,12 @@ export default function DashboardPage() {
       buckets.get(key)!.shipped += Number.isFinite(qty) ? qty : 0;
     }
 
-    for (const row of inventoryData) {
+    const inventoryFiltered = hasDateRange && dateRangeFrom && dateRangeTo
+      ? inventoryData.filter((row) =>
+          isDateInRange(normalizeInventoryDate(row.dateAdded), dateRangeFrom, dateRangeTo)
+        )
+      : inventoryData;
+    for (const row of inventoryFiltered) {
       const d = normalizeInventoryDate(row.dateAdded);
       if (!d) continue;
       const key = d.toISOString().slice(0, 10);
@@ -253,17 +299,17 @@ export default function DashboardPage() {
     }
 
     return Array.from(buckets.values());
-  }, [inventoryData, shippedData, trendRange]);
+  }, [inventoryData, shippedDataInRange, trendRange, hasDateRange, dateRangeFrom, dateRangeTo]);
 
   const orderStatusData = useMemo(() => {
     const statusCounts = {
       pending: 0,
-      shipped: shippedData.length,
+      shipped: shippedDataInRange.length,
       rejected: 0,
       processing: 0,
     };
 
-    for (const req of shipmentRequests) {
+    for (const req of shipmentRequestsInRange) {
       const status = (req.status || "").toLowerCase();
       if (status === "pending") statusCounts.pending += 1;
       else if (status === "rejected") statusCounts.rejected += 1;
@@ -276,7 +322,7 @@ export default function DashboardPage() {
       { name: "Processing", value: statusCounts.processing, fill: "var(--color-processing)" },
       { name: "Rejected", value: statusCounts.rejected, fill: "var(--color-rejected)" },
     ];
-  }, [shipmentRequests, shippedData.length]);
+  }, [shipmentRequestsInRange, shippedDataInRange.length]);
 
   const sourceSplitData = useMemo(
     () => [
@@ -308,7 +354,7 @@ export default function DashboardPage() {
   const topMovingProducts = useMemo(() => {
     const moved = new Map<string, number>();
 
-    for (const row of shippedData) {
+    for (const row of shippedDataInRange) {
       if (Array.isArray(row.items) && row.items.length > 0) {
         for (const item of row.items) {
           const name = item.productName || "Unknown Product";
@@ -333,10 +379,10 @@ export default function DashboardPage() {
       }))
       .sort((a, b) => b.units - a.units)
       .slice(0, 8);
-  }, [shippedData, inventoryData]);
+  }, [shippedDataInRange, inventoryData]);
 
   const recentOrders = useMemo(() => {
-    return shipmentRequests
+    return shipmentRequestsInRange
       .slice()
       .sort((a, b) => {
         const ad = normalizeRequestDate(a.requestedAt || a.date)?.getTime() || 0;
@@ -344,10 +390,15 @@ export default function DashboardPage() {
         return bd - ad;
       })
       .slice(0, 8);
-  }, [shipmentRequests]);
+  }, [shipmentRequestsInRange]);
 
   const recentInventoryChanges = useMemo(() => {
-    return inventoryData
+    const list = hasDateRange && dateRangeFrom && dateRangeTo
+      ? inventoryData.filter((row) =>
+          isDateInRange(normalizeInventoryDate(row.dateAdded), dateRangeFrom, dateRangeTo)
+        )
+      : inventoryData;
+    return list
       .slice()
       .sort((a, b) => {
         const ad = normalizeInventoryDate(a.dateAdded)?.getTime() || 0;
@@ -355,10 +406,10 @@ export default function DashboardPage() {
         return bd - ad;
       })
       .slice(0, 8);
-  }, [inventoryData]);
+  }, [inventoryData, hasDateRange, dateRangeFrom, dateRangeTo]);
 
   const recentShipments = useMemo(() => {
-    return shippedData
+    return shippedDataInRange
       .slice()
       .sort((a, b) => {
         const ad = normalizeDate(a.date)?.getTime() || 0;
@@ -366,14 +417,14 @@ export default function DashboardPage() {
         return bd - ad;
       })
       .slice(0, 8);
-  }, [shippedData]);
+  }, [shippedDataInRange]);
 
   const kpiCards = [
     { title: "Total Inventory", value: String(totalItemsInInventory), hint: "Units across all products", icon: Boxes, iconBg: "bg-blue-500/10 text-blue-600" },
     { title: "Low Stock SKUs", value: String(lowStockItems.length), hint: "Qty ≤ 10", icon: AlertTriangle, iconBg: "bg-amber-500/10 text-amber-600" },
     { title: "Orders Pending", value: String(pendingFulfillmentCount), hint: "Awaiting fulfillment", icon: Clock3, iconBg: "bg-orange-500/10 text-orange-600" },
     { title: "Pending Invoice", value: invoicesLoading ? "..." : `$${totalPendingAmount.toFixed(2)}`, hint: "Outstanding balance", icon: DollarSign, iconBg: "bg-emerald-500/10 text-emerald-600" },
-    { title: "Today Shipped", value: String(todaysShippedOrders), hint: "Shipped today", icon: Truck, iconBg: "bg-violet-500/10 text-violet-600" },
+    { title: hasDateRange ? "Shipped in period" : "Today Shipped", value: String(todaysShippedOrders), hint: hasDateRange ? "In selected date range" : "Shipped today", icon: Truck, iconBg: "bg-violet-500/10 text-violet-600" },
     { title: "Integration Health", value: shopifyConnectionsLoading || ebayConnectionsLoading ? "..." : `${integrationHealth.pct}%`, hint: integrationHealth.label, icon: RefreshCw, iconBg: "bg-teal-500/10 text-teal-600" },
   ];
 
@@ -411,23 +462,27 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <CardTitle className="text-base font-semibold text-neutral-900">Inventory & Shipment Trend</CardTitle>
-                  <CardDescription className="text-neutral-500">Shipped vs added inventory over time</CardDescription>
+                  <CardDescription className="text-neutral-500">
+                    {hasDateRange ? "Shipped vs added in selected date range" : "Shipped vs added inventory over time"}
+                  </CardDescription>
                 </div>
-                <div className="inline-flex rounded-lg border border-neutral-200 bg-neutral-50/80 p-1">
-                  {([7, 14, 30] as const).map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setTrendRange(d)}
-                      className={cn(
-                        "rounded-md px-3 py-1.5 text-xs font-medium transition",
-                        trendRange === d ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
-                      )}
-                    >
-                      {d}d
-                    </button>
-                  ))}
-                </div>
+                {!hasDateRange && (
+                  <div className="inline-flex rounded-lg border border-neutral-200 bg-neutral-50/80 p-1">
+                    {([7, 14, 30] as const).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setTrendRange(d)}
+                        className={cn(
+                          "rounded-md px-3 py-1.5 text-xs font-medium transition",
+                          trendRange === d ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
+                        )}
+                      >
+                        {d}d
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardHeader>
             <CardContent className="px-6 pb-6">

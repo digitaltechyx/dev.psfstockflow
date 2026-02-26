@@ -1,20 +1,12 @@
 "use client";
 
-import { LogOut, User as UserIcon, Search, Filter } from "lucide-react";
+import { LogOut, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,11 +60,11 @@ export function DashboardHeader({ onProfileClick }: DashboardHeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border/40 bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:gap-4 sm:px-4 lg:px-6">
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border/40 bg-white px-3 sm:gap-4 sm:px-4 lg:px-6">
       <SidebarTrigger className="-ml-1 shrink-0" />
 
       <div className="flex flex-1 items-center justify-between gap-2 overflow-hidden sm:justify-end sm:gap-4">
-        {/* Filters + date + search (one top bar) */}
+        {/* Date range only */}
         {nav && (
           <div className="flex flex-1 flex-wrap items-center gap-2 sm:flex-initial sm:flex-nowrap">
             <DateRangePicker
@@ -82,25 +74,6 @@ export function DashboardHeader({ onProfileClick }: DashboardHeaderProps) {
               setToDate={nav.setDateRangeTo}
               className="h-9 w-full min-w-0 border-border bg-background text-sm sm:w-[220px]"
             />
-            <Select value={nav.sourceFilter} onValueChange={nav.setSourceFilter}>
-              <SelectTrigger className="h-9 w-[120px] shrink-0 border-border bg-background sm:w-[130px]">
-                <Filter className="mr-1.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                <SelectValue placeholder="Source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All sources</SelectItem>
-                <SelectItem value="shopify">Shopify</SelectItem>
-                <SelectItem value="ebay">eBay</SelectItem>
-                <SelectItem value="manual">Manual</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="relative hidden w-[140px] shrink-0 sm:block md:w-[160px]">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="h-9 border-border bg-background pl-8 text-sm"
-                placeholder="Search..."
-              />
-            </div>
           </div>
         )}
 
