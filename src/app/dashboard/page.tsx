@@ -7,7 +7,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -387,44 +386,6 @@ export default function DashboardPage() {
       .slice(0, 8);
   }, [shippedDataInRange, inventoryData]);
 
-  const recentOrders = useMemo(() => {
-    return shipmentRequestsInRange
-      .slice()
-      .sort((a, b) => {
-        const ad = normalizeRequestDate(a.requestedAt || a.date)?.getTime() || 0;
-        const bd = normalizeRequestDate(b.requestedAt || b.date)?.getTime() || 0;
-        return bd - ad;
-      })
-      .slice(0, 8);
-  }, [shipmentRequestsInRange]);
-
-  const recentInventoryChanges = useMemo(() => {
-    const list = hasDateRange && dateRangeFrom && dateRangeTo
-      ? inventoryData.filter((row) =>
-          isDateInRange(normalizeInventoryDate(row.dateAdded), dateRangeFrom, dateRangeTo)
-        )
-      : inventoryData;
-    return list
-      .slice()
-      .sort((a, b) => {
-        const ad = normalizeInventoryDate(a.dateAdded)?.getTime() || 0;
-        const bd = normalizeInventoryDate(b.dateAdded)?.getTime() || 0;
-        return bd - ad;
-      })
-      .slice(0, 8);
-  }, [inventoryData, hasDateRange, dateRangeFrom, dateRangeTo]);
-
-  const recentShipments = useMemo(() => {
-    return shippedDataInRange
-      .slice()
-      .sort((a, b) => {
-        const ad = normalizeDate(a.date)?.getTime() || 0;
-        const bd = normalizeDate(b.date)?.getTime() || 0;
-        return bd - ad;
-      })
-      .slice(0, 8);
-  }, [shippedDataInRange]);
-
   const kpiCards = [
     { title: "Total Inventory", value: String(totalItemsInInventory), hint: "Units across all products", icon: Boxes, iconBg: "bg-blue-500/10 text-blue-600" },
     { title: "Low Stock SKUs", value: String(lowStockItems.length), hint: "Qty ≤ 10", icon: AlertTriangle, iconBg: "bg-amber-500/10 text-amber-600" },
@@ -528,7 +489,7 @@ export default function DashboardPage() {
               <ChartContainer config={orderStatusChartConfig} className="h-[280px] w-full">
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+                  <ChartLegend content={<ChartLegendContent nameKey="name" className="grid grid-cols-2 gap-x-6 gap-y-2 justify-items-start" />} />
                   <Pie data={orderStatusData} dataKey="value" nameKey="name" innerRadius={56} outerRadius={88} paddingAngle={2}>
                     {orderStatusData.map((entry) => (
                       <Cell key={entry.name} fill={entry.fill} />
@@ -544,37 +505,39 @@ export default function DashboardPage() {
               <CardTitle className="text-base font-semibold text-neutral-900">Alerts</CardTitle>
               <CardDescription className="text-neutral-500">Needs attention</CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 space-y-3 px-6 pb-6">
-              <div className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-3">
-                <p className="text-sm font-medium text-amber-900">Low Stock ({lowStockItems.length})</p>
-                {lowStockItems.length === 0 ? (
-                  <p className="mt-1 text-xs text-amber-700">All good</p>
-                ) : (
-                  lowStockItems.slice(0, 3).map((item) => (
-                    <p key={item.id} className="mt-1 text-xs text-amber-800">{item.productName}: {item.quantity} left</p>
-                  ))
-                )}
-              </div>
-              <div className="rounded-lg border border-rose-200/80 bg-rose-50/60 p-3">
-                <p className="text-sm font-medium text-rose-900">Rejected Requests ({rejectedInventoryRequests.length})</p>
-                {rejectedInventoryRequests.length === 0 ? (
-                  <p className="mt-1 text-xs text-rose-700">None</p>
-                ) : (
-                  rejectedInventoryRequests.slice(0, 2).map((req, idx) => (
-                    <p key={`${req.productName}-${idx}`} className="mt-1 text-xs text-rose-800">{req.productName || "Item"}: {req.rejectionReason || "Rejected"}</p>
-                  ))
-                )}
-              </div>
-              <div className="rounded-lg border border-blue-200/80 bg-blue-50/60 p-3">
-                <p className="text-sm font-medium text-blue-900">Pending Fulfillment ({pendingFulfillmentCount})</p>
-                <p className="mt-1 text-xs text-blue-700">Shipment requests waiting</p>
-                <Link href="/dashboard/shipped-orders" className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline">Review →</Link>
-              </div>
-              <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 p-3">
-                <p className="text-sm font-medium text-emerald-900">Integrations</p>
-                <p className="mt-1 text-xs text-emerald-800">Shopify: {shopifyConnections.length > 0 ? "Connected" : "Not connected"}</p>
-                <p className="text-xs text-emerald-800">eBay: {ebayConnections.length > 0 ? "Connected" : "Not connected"}</p>
-                <Link href="/dashboard/integrations" className="mt-2 inline-block text-xs font-medium text-emerald-600 hover:underline">Settings →</Link>
+            <CardContent className="flex-1 px-6 pb-6">
+              <div className="flex flex-wrap gap-3">
+                <div className="min-w-[140px] flex-1 rounded-lg border border-amber-200/80 bg-amber-50/60 p-3">
+                  <p className="text-sm font-medium text-amber-900">Low Stock ({lowStockItems.length})</p>
+                  {lowStockItems.length === 0 ? (
+                    <p className="mt-1 text-xs text-amber-700">All good</p>
+                  ) : (
+                    lowStockItems.slice(0, 3).map((item) => (
+                      <p key={item.id} className="mt-1 text-xs text-amber-800">{item.productName}: {item.quantity} left</p>
+                    ))
+                  )}
+                </div>
+                <div className="min-w-[140px] flex-1 rounded-lg border border-rose-200/80 bg-rose-50/60 p-3">
+                  <p className="text-sm font-medium text-rose-900">Rejected Requests ({rejectedInventoryRequests.length})</p>
+                  {rejectedInventoryRequests.length === 0 ? (
+                    <p className="mt-1 text-xs text-rose-700">None</p>
+                  ) : (
+                    rejectedInventoryRequests.slice(0, 2).map((req, idx) => (
+                      <p key={`${req.productName}-${idx}`} className="mt-1 text-xs text-rose-800">{req.productName || "Item"}: {req.rejectionReason || "Rejected"}</p>
+                    ))
+                  )}
+                </div>
+                <div className="min-w-[140px] flex-1 rounded-lg border border-blue-200/80 bg-blue-50/60 p-3">
+                  <p className="text-sm font-medium text-blue-900">Pending Fulfillment ({pendingFulfillmentCount})</p>
+                  <p className="mt-1 text-xs text-blue-700">Shipment requests waiting</p>
+                  <Link href="/dashboard/shipped-orders" className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline">Review →</Link>
+                </div>
+                <div className="min-w-[140px] flex-1 rounded-lg border border-emerald-200/80 bg-emerald-50/60 p-3">
+                  <p className="text-sm font-medium text-emerald-900">Integrations</p>
+                  <p className="mt-1 text-xs text-emerald-800">Shopify: {shopifyConnections.length > 0 ? "Connected" : "Not connected"}</p>
+                  <p className="text-xs text-emerald-800">eBay: {ebayConnections.length > 0 ? "Connected" : "Not connected"}</p>
+                  <Link href="/dashboard/integrations" className="mt-2 inline-block text-xs font-medium text-emerald-600 hover:underline">Settings →</Link>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -643,122 +606,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </section>
-
-        {/* Recent activity table */}
-        <Card className="overflow-hidden rounded-xl border-neutral-200/80 bg-white/90 shadow-[0_1px_3px_rgba(0,0,0,0.08)] backdrop-blur-sm">
-          <CardHeader className="pb-2 pt-6 px-6">
-            <CardTitle className="text-base font-semibold text-neutral-900">Recent Activity</CardTitle>
-            <CardDescription className="text-neutral-500">Orders, inventory changes, shipments</CardDescription>
-          </CardHeader>
-          <CardContent className="px-6 pb-6">
-            <Tabs defaultValue="orders" className="w-full">
-              <TabsList className="mb-4 inline-flex h-10 rounded-lg border border-neutral-200 bg-neutral-50/80 p-1">
-                <TabsTrigger value="orders" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-neutral-900 data-[state=active]:shadow-sm">
-                  Recent Orders
-                </TabsTrigger>
-                <TabsTrigger value="inventory" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-neutral-900 data-[state=active]:shadow-sm">
-                  Inventory
-                </TabsTrigger>
-                <TabsTrigger value="shipments" className="rounded-md data-[state=active]:bg-white data-[state=active]:text-neutral-900 data-[state=active]:shadow-sm">
-                  Shipments
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="orders">
-                <div className="overflow-hidden rounded-xl border border-neutral-200/80">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-neutral-200 bg-neutral-50/80 hover:bg-neutral-50/80">
-                        <TableHead className="font-medium text-neutral-600">Request</TableHead>
-                        <TableHead className="font-medium text-neutral-600">Status</TableHead>
-                        <TableHead className="font-medium text-neutral-600">Ship To</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {recentOrders.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={3} className="py-8 text-center text-sm text-neutral-500">No recent orders</TableCell>
-                        </TableRow>
-                      ) : (
-                        recentOrders.map((order, idx) => (
-                          <TableRow key={order.id || `req-${idx}`} className="border-neutral-100">
-                            <TableCell className="font-medium text-neutral-900">{order.id || "Request"}</TableCell>
-                            <TableCell>
-                              <Badge variant={(order.status || "").toLowerCase() === "rejected" ? "destructive" : "outline"} className="font-medium">
-                                {(order.status || "pending").replace("_", " ")}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-neutral-600">{order.shipTo || "—"}</TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="inventory">
-                <div className="overflow-hidden rounded-xl border border-neutral-200/80">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-neutral-200 bg-neutral-50/80 hover:bg-neutral-50/80">
-                        <TableHead className="font-medium text-neutral-600">Product</TableHead>
-                        <TableHead className="text-right font-medium text-neutral-600">Quantity</TableHead>
-                        <TableHead className="font-medium text-neutral-600">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {recentInventoryChanges.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={3} className="py-8 text-center text-sm text-neutral-500">No inventory changes</TableCell>
-                        </TableRow>
-                      ) : (
-                        recentInventoryChanges.map((item) => (
-                          <TableRow key={item.id} className="border-neutral-100">
-                            <TableCell className="font-medium text-neutral-900">{item.productName}</TableCell>
-                            <TableCell className="text-right text-neutral-600">{item.quantity}</TableCell>
-                            <TableCell>
-                              <Badge variant={item.status === "Out of Stock" ? "destructive" : "secondary"} className="font-medium">{item.status}</Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="shipments">
-                <div className="overflow-hidden rounded-xl border border-neutral-200/80">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-neutral-200 bg-neutral-50/80 hover:bg-neutral-50/80">
-                        <TableHead className="font-medium text-neutral-600">Product</TableHead>
-                        <TableHead className="text-right font-medium text-neutral-600">Shipped</TableHead>
-                        <TableHead className="font-medium text-neutral-600">Destination</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {recentShipments.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={3} className="py-8 text-center text-sm text-neutral-500">No shipments</TableCell>
-                        </TableRow>
-                      ) : (
-                        recentShipments.map((item) => (
-                          <TableRow key={item.id} className="border-neutral-100">
-                            <TableCell className="font-medium text-neutral-900">{item.productName || "Multi-item"}</TableCell>
-                            <TableCell className="text-right text-neutral-600">{item.shippedQty || item.totalUnits || 0}</TableCell>
-                            <TableCell className="text-neutral-600">{item.shipTo || "—"}</TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
