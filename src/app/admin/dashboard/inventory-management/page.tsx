@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Package, Users, ChevronsUpDown, Check } from "lucide-react";
+import { Package, Users, ChevronsUpDown, Check, Boxes, AlertTriangle, Truck, Clock } from "lucide-react";
 import { AdminInventoryManagement } from "@/components/admin/admin-inventory-management";
 import { Skeleton } from "@/components/ui/skeleton";
+
+type ShipmentRequestLite = { status?: string };
 
 export default function AdminInventoryManagementPage() {
   const { userProfile: adminUser } = useAuth();
@@ -58,6 +60,25 @@ export default function AdminInventoryManagementPage() {
 
   const { data: inventory, loading: inventoryLoading } = useCollection<InventoryItem>(inventoryPath);
   const { data: shipped, loading: shippedLoading } = useCollection<ShippedItem>(shippedPath);
+  const shipmentRequestsPath = selectedUser?.uid ? `users/${selectedUser.uid}/shipmentRequests` : "";
+  const { data: shipmentRequests } = useCollection<ShipmentRequestLite>(shipmentRequestsPath);
+
+  const stats = useMemo(() => {
+    const inv = inventory ?? [];
+    const ship = shipped ?? [];
+    const totalUnits = inv.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    const lowStockSkus = inv.filter((item) => (Number(item.quantity) || 0) <= 10).length;
+    const pendingRequests = (shipmentRequests ?? []).filter(
+      (r) => (r.status || "").toLowerCase() === "pending"
+    ).length;
+    return {
+      totalUnits,
+      skuCount: inv.length,
+      lowStockSkus,
+      shippedOrders: ship.length,
+      pendingRequests,
+    };
+  }, [inventory, shipped, shipmentRequests]);
 
   const ebayRefreshDoneForUser = useRef<string | null>(null);
   useEffect(() => {
@@ -85,6 +106,79 @@ export default function AdminInventoryManagementPage() {
 
   return (
     <div className="space-y-6">
+      {selectedUser && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="border-2 border-blue-200/50 bg-gradient-to-br from-blue-50 to-blue-100/50 shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-blue-900">Total Inventory</CardTitle>
+              <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center shadow-md">
+                <Boxes className="h-5 w-5 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {inventoryLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                <>
+                  <div className="text-3xl font-bold text-blue-900">{stats.totalUnits.toLocaleString()}</div>
+                  <p className="text-xs text-blue-700 mt-1">Units across {stats.skuCount} SKU(s)</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="border-2 border-amber-200/50 bg-gradient-to-br from-amber-50 to-amber-100/50 shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-amber-900">Low Stock SKUs</CardTitle>
+              <div className="h-10 w-10 rounded-full bg-amber-500 flex items-center justify-center shadow-md">
+                <AlertTriangle className="h-5 w-5 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {inventoryLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                <>
+                  <div className="text-3xl font-bold text-amber-900">{stats.lowStockSkus}</div>
+                  <p className="text-xs text-amber-700 mt-1">Qty ≤ 10</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="border-2 border-teal-200/50 bg-gradient-to-br from-teal-50 to-teal-100/50 shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-teal-900">Shipped Orders</CardTitle>
+              <div className="h-10 w-10 rounded-full bg-teal-500 flex items-center justify-center shadow-md">
+                <Truck className="h-5 w-5 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {shippedLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                <>
+                  <div className="text-3xl font-bold text-teal-900">{stats.shippedOrders}</div>
+                  <p className="text-xs text-teal-700 mt-1">Total shipments</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="border-2 border-orange-200/50 bg-gradient-to-br from-orange-50 to-orange-100/50 shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-orange-900">Pending Requests</CardTitle>
+              <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center shadow-md">
+                <Clock className="h-5 w-5 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <>
+                <div className="text-3xl font-bold text-orange-900">{stats.pendingRequests}</div>
+                <p className="text-xs text-orange-700 mt-1">Awaiting fulfillment</p>
+              </>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Card className="border-2 shadow-xl overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white pb-4">
           <div className="flex items-center justify-between">
