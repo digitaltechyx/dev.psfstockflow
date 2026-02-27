@@ -83,7 +83,7 @@ export default function AdminDashboardPage() {
 
   const [dateRangeFrom, setDateRangeFrom] = useState<Date | undefined>();
   const [dateRangeTo, setDateRangeTo] = useState<Date | undefined>();
-  const trendDays = 30;
+  const [trendRange, setTrendRange] = useState<7 | 14 | 30>(30);
   const hasDateRange = Boolean(dateRangeFrom && dateRangeTo);
 
   const activeUsersCount = useMemo(() => {
@@ -334,8 +334,15 @@ export default function AdminDashboardPage() {
       return;
     }
     const adminUid = adminUser.uid;
-    const start = hasDateRange && dateRangeFrom ? startOfDay(dateRangeFrom) : new Date(Date.now() - trendDays * 86400000);
-    const end = hasDateRange && dateRangeTo ? endOfDay(dateRangeTo) : new Date();
+    let start: Date;
+    let end: Date;
+    if (hasDateRange && dateRangeFrom && dateRangeTo) {
+      start = startOfDay(dateRangeFrom);
+      end = endOfDay(dateRangeTo);
+    } else {
+      start = new Date(Date.now() - trendRange * 86400000);
+      end = new Date();
+    }
 
     const run = async () => {
       setChartLoading(true);
@@ -531,7 +538,7 @@ export default function AdminDashboardPage() {
       }
     };
     run();
-  }, [adminUser?.uid, users, hasDateRange, dateRangeFrom, dateRangeTo, trendDays]);
+  }, [adminUser?.uid, users, hasDateRange, dateRangeFrom, dateRangeTo, trendRange]);
 
   const trendChartConfig = {
     shipped: { label: "Shipped", color: "#3b82f6" },
@@ -563,30 +570,13 @@ export default function AdminDashboardPage() {
   } satisfies ChartConfig;
 
   const kpiCards = [
-    { title: "Pending Users", value: String(pendingUsersCount), hint: "Awaiting approval", icon: Shield, color: "orange", href: "/admin/dashboard/users" },
-    { title: "Active Users", value: String(activeUsersCount), hint: "Approved users", icon: Users, color: "green", href: "/admin/dashboard/users" },
-    { title: "Pending Invoices", value: invoicesLoading ? "…" : `${pendingInvoicesCount} ($${pendingInvoicesAmount.toFixed(0)})`, hint: "Outstanding", icon: Receipt, color: "blue", href: "/admin/dashboard/invoices" },
-    { title: "Pending Requests", value: requestsLoading ? "…" : String(pendingRequestsCount), hint: "All request types", icon: Bell, color: "indigo", href: "/admin/dashboard/notifications" },
-    { title: "Shipped Today", value: shippedAndReceivedLoading ? "…" : String(ordersShippedToday), hint: "Shipments recorded", icon: Truck, color: "teal", href: "/admin/dashboard/shopify-orders" },
-    { title: "Received Today", value: shippedAndReceivedLoading ? "…" : String(receivedUnitsToday), hint: "Units added", icon: PackageCheck, color: "amber", href: "/admin/dashboard/inventory-management" },
+    { title: "Pending Users", value: String(pendingUsersCount), hint: "Awaiting approval", icon: Shield, iconBg: "bg-orange-500/10 text-orange-600", href: "/admin/dashboard/users" },
+    { title: "Active Users", value: String(activeUsersCount), hint: "Approved users", icon: Users, iconBg: "bg-emerald-500/10 text-emerald-600", href: "/admin/dashboard/users" },
+    { title: "Pending Invoices", value: invoicesLoading ? "…" : `${pendingInvoicesCount} ($${pendingInvoicesAmount.toFixed(0)})`, hint: "Outstanding", icon: Receipt, iconBg: "bg-blue-500/10 text-blue-600", href: "/admin/dashboard/invoices" },
+    { title: "Pending Requests", value: requestsLoading ? "…" : String(pendingRequestsCount), hint: "All request types", icon: Bell, iconBg: "bg-indigo-500/10 text-indigo-600", href: "/admin/dashboard/notifications" },
+    { title: "Shipped Today", value: shippedAndReceivedLoading ? "…" : String(ordersShippedToday), hint: "Shipments recorded", icon: Truck, iconBg: "bg-teal-500/10 text-teal-600", href: "/admin/dashboard/shopify-orders" },
+    { title: "Received Today", value: shippedAndReceivedLoading ? "…" : String(receivedUnitsToday), hint: "Units added", icon: PackageCheck, iconBg: "bg-amber-500/10 text-amber-600", href: "/admin/dashboard/inventory-management" },
   ];
-
-  const colorClasses: Record<string, string> = {
-    orange: "border-orange-200/60 bg-gradient-to-br from-orange-50/90 to-orange-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
-    green: "border-emerald-200/60 bg-gradient-to-br from-emerald-50/90 to-emerald-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
-    blue: "border-blue-200/60 bg-gradient-to-br from-blue-50/90 to-blue-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
-    indigo: "border-indigo-200/60 bg-gradient-to-br from-indigo-50/90 to-indigo-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
-    teal: "border-teal-200/60 bg-gradient-to-br from-teal-50/90 to-teal-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
-    amber: "border-amber-200/60 bg-gradient-to-br from-amber-50/90 to-amber-100/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
-  };
-  const iconBgClasses: Record<string, string> = {
-    orange: "bg-orange-500/12 text-orange-600",
-    green: "bg-emerald-500/12 text-emerald-600",
-    blue: "bg-blue-500/12 text-blue-600",
-    indigo: "bg-indigo-500/12 text-indigo-600",
-    teal: "bg-teal-500/12 text-teal-600",
-    amber: "bg-amber-500/12 text-amber-600",
-  };
   const collectionRate = financialMetrics.billedInRange > 0
     ? Math.round((financialMetrics.paidInRange / financialMetrics.billedInRange) * 100)
     : 0;
@@ -620,28 +610,22 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* KPI Cards — premium compact */}
+        {/* KPI Cards — same style as user dashboard */}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {kpiCards.map((kpi) => {
             const Icon = kpi.icon;
             return (
               <Link key={kpi.title} href={kpi.href} className="block">
-                <Card
-                  className={cn(
-                    "overflow-hidden rounded-xl border transition-shadow hover:shadow-md",
-                    colorClasses[kpi.color] || colorClasses.blue
-                  )}
-                >
+                <Card className="overflow-hidden rounded-xl border-neutral-200/80 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] transition-shadow hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between">
-                      <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", iconBgClasses[kpi.color] || iconBgClasses.blue)}>
+                      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", kpi.iconBg)}>
                         <Icon className="h-5 w-5" />
                       </div>
-                      <ArrowRight className="h-4 w-4 text-slate-400" />
                     </div>
-                    <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">{kpi.value}</p>
-                    <p className="mt-0.5 text-sm font-medium text-slate-600">{kpi.title}</p>
-                    <p className="mt-1 text-xs text-slate-500">{kpi.hint}</p>
+                    <p className="mt-3 text-2xl font-semibold tracking-tight text-neutral-900">{kpi.value}</p>
+                    <p className="mt-0.5 text-sm font-medium text-neutral-600">{kpi.title}</p>
+                    <p className="mt-1 text-xs text-neutral-500">{kpi.hint}</p>
                   </CardContent>
                 </Card>
               </Link>
@@ -754,16 +738,39 @@ export default function AdminDashboardPage() {
         <section className="grid gap-6 lg:grid-cols-12">
           <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-8">
             <CardHeader className="pb-2 pt-6 px-6">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
-                  <TrendingUp className="h-4 w-4" />
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-semibold text-slate-900">
+                      {hasDateRange
+                        ? "Shipments & inventory over time (Selected range)"
+                        : `Shipments & inventory over time (Last ${trendRange} days)`}
+                    </CardTitle>
+                    <CardDescription className="text-slate-500">
+                      {hasDateRange ? "Shipped, added, returns & disposed in date picker range" : `Shipped, added, returns & disposed — ${trendRange}d view`}
+                    </CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-base font-semibold text-slate-900">Shipments & inventory over time</CardTitle>
-                  <CardDescription className="text-slate-500">
-                    {hasDateRange ? "In selected date range" : `Last ${trendDays} days`}
-                  </CardDescription>
-                </div>
+                {!hasDateRange && (
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50/80 p-1">
+                    {([7, 14, 30] as const).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setTrendRange(d)}
+                        className={cn(
+                          "rounded-md px-3 py-1.5 text-xs font-medium transition",
+                          trendRange === d ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                        )}
+                      >
+                        {d}d
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardHeader>
             <CardContent className="px-6 pb-6">
