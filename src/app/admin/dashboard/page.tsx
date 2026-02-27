@@ -234,6 +234,9 @@ export default function AdminDashboardPage() {
   const [dateRangeFrom, setDateRangeFrom] = useState<Date | undefined>();
   const [dateRangeTo, setDateRangeTo] = useState<Date | undefined>();
   const [trendRange, setTrendRange] = useState<7 | 14 | 30>(30);
+  const [requestTrendRange, setRequestTrendRange] = useState<7 | 14 | 30>(30);
+  const [topUsersRange, setTopUsersRange] = useState<7 | 14 | 30>(30);
+  const [requestTypesRange, setRequestTypesRange] = useState<7 | 14 | 30>(30);
   const hasDateRange = Boolean(dateRangeFrom && dateRangeTo);
 
   const activeUsersCount = useMemo(() => {
@@ -493,31 +496,34 @@ export default function AdminDashboardPage() {
       return;
     }
     const adminUid = adminUser.uid;
-    let start: Date;
-    let end: Date;
-    if (hasDateRange && dateRangeFrom && dateRangeTo) {
-      start = startOfDay(dateRangeFrom);
-      end = endOfDay(dateRangeTo);
-    } else {
-      start = new Date(Date.now() - trendRange * 86400000);
-      end = new Date();
-    }
+    const getStartEnd = (range: 7 | 14 | 30) => {
+      if (hasDateRange && dateRangeFrom && dateRangeTo) {
+        return { start: startOfDay(dateRangeFrom), end: endOfDay(dateRangeTo) };
+      }
+      return {
+        start: new Date(Date.now() - range * 86400000),
+        end: new Date(),
+      };
+    };
 
     const refs = chartRefs.current;
     const runAggregate = () => {
-      const next = aggregateChartData(
-        refs.shipped,
-        refs.inventory,
-        refs.shipReq,
-        refs.invReq,
-        refs.returns,
-        refs.dispose,
-        start,
-        end,
-        adminUid,
-        users || []
-      );
-      setChartData(next);
+      const se1 = getStartEnd(trendRange);
+      const se2 = getStartEnd(requestTrendRange);
+      const se3 = getStartEnd(topUsersRange);
+      const se4 = getStartEnd(requestTypesRange);
+      const r1 = aggregateChartData(refs.shipped, refs.inventory, refs.shipReq, refs.invReq, refs.returns, refs.dispose, se1.start, se1.end, adminUid, users || []);
+      const r2 = aggregateChartData(refs.shipped, refs.inventory, refs.shipReq, refs.invReq, refs.returns, refs.dispose, se2.start, se2.end, adminUid, users || []);
+      const r3 = aggregateChartData(refs.shipped, refs.inventory, refs.shipReq, refs.invReq, refs.returns, refs.dispose, se3.start, se3.end, adminUid, users || []);
+      const r4 = aggregateChartData(refs.shipped, refs.inventory, refs.shipReq, refs.invReq, refs.returns, refs.dispose, se4.start, se4.end, adminUid, users || []);
+      setChartData({
+        trend: r1.trend,
+        requestTrend: r2.requestTrend,
+        requestTypes: r3.requestTypes,
+        statusDonut: r1.statusDonut,
+        topUsers: r4.topUsers,
+        recentActivity: r2.recentActivity,
+      });
     };
 
     setChartLoading(true);
@@ -598,7 +604,7 @@ export default function AdminDashboardPage() {
       unsubReturns();
       unsubDispose();
     };
-  }, [adminUser?.uid, users, hasDateRange, dateRangeFrom, dateRangeTo, trendRange]);
+  }, [adminUser?.uid, users, hasDateRange, dateRangeFrom, dateRangeTo, trendRange, requestTrendRange, topUsersRange, requestTypesRange]);
 
   const trendChartConfig = {
     shipped: { label: "Shipped", color: "#3b82f6" },
@@ -896,7 +902,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div>
                     <CardTitle className="text-base font-semibold text-slate-900">Request volume over time</CardTitle>
-                    <CardDescription className="text-slate-500">Daily request activity — {hasDateRange ? "date range" : `${trendRange}d view`}</CardDescription>
+                    <CardDescription className="text-slate-500">Daily request activity — {hasDateRange ? "date range" : `${requestTrendRange}d view`}</CardDescription>
                   </div>
                 </div>
                 {!hasDateRange && (
@@ -905,10 +911,10 @@ export default function AdminDashboardPage() {
                       <button
                         key={d}
                         type="button"
-                        onClick={() => setTrendRange(d)}
+                        onClick={() => setRequestTrendRange(d)}
                         className={cn(
                           "rounded-md px-3 py-1.5 text-xs font-medium transition",
-                          trendRange === d ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                          requestTrendRange === d ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                         )}
                       >
                         {d}d
@@ -940,7 +946,7 @@ export default function AdminDashboardPage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <CardTitle className="text-base font-semibold text-slate-900">Top users by request volume</CardTitle>
-                  <CardDescription className="text-slate-500">Most active users — {hasDateRange ? "date range" : `last ${trendRange} days`}</CardDescription>
+                  <CardDescription className="text-slate-500">Most active users — {hasDateRange ? "date range" : `last ${topUsersRange} days`}</CardDescription>
                 </div>
                 {!hasDateRange && (
                   <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50/80 p-1">
@@ -948,10 +954,10 @@ export default function AdminDashboardPage() {
                       <button
                         key={d}
                         type="button"
-                        onClick={() => setTrendRange(d)}
+                        onClick={() => setTopUsersRange(d)}
                         className={cn(
                           "rounded-md px-3 py-1.5 text-xs font-medium transition",
-                          trendRange === d ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                          topUsersRange === d ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                         )}
                       >
                         {d}d
@@ -990,7 +996,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div>
                     <CardTitle className="text-base font-semibold text-slate-900">Requests by type</CardTitle>
-                    <CardDescription className="text-slate-500">Shipment, inventory, returns, dispose — {hasDateRange ? "date range" : `${trendRange}d view`}</CardDescription>
+                    <CardDescription className="text-slate-500">Shipment, inventory, returns, dispose — {hasDateRange ? "date range" : `${requestTypesRange}d view`}</CardDescription>
                   </div>
                 </div>
                 {!hasDateRange && (
@@ -999,10 +1005,10 @@ export default function AdminDashboardPage() {
                       <button
                         key={d}
                         type="button"
-                        onClick={() => setTrendRange(d)}
+                        onClick={() => setRequestTypesRange(d)}
                         className={cn(
                           "rounded-md px-3 py-1.5 text-xs font-medium transition",
-                          trendRange === d ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                          requestTypesRange === d ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                         )}
                       >
                         {d}d
