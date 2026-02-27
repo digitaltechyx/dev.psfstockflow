@@ -488,8 +488,16 @@ export default function AdminDashboardPage() {
     returns: [] as Array<{ ref: { path: string }; data: () => RequestDoc }>,
     dispose: [] as Array<{ ref: { path: string }; data: () => RequestDoc }>,
   });
+  const rangeRef = useRef({ trendRange, requestTrendRange, topUsersRange, requestTypesRange });
+  const runAggregateRef = useRef<() => void>(() => {});
+  const hasChartDataRef = useRef(false);
 
   useEffect(() => {
+    rangeRef.current = { trendRange, requestTrendRange, topUsersRange, requestTypesRange };
+  }, [trendRange, requestTrendRange, topUsersRange, requestTypesRange]);
+
+  useEffect(() => {
+    hasChartDataRef.current = false;
     if (!adminUser?.uid || !users?.length) {
       setChartData({ trend: [], requestTrend: [], requestTypes: [], statusDonut: [], topUsers: [], recentActivity: [] });
       setChartLoading(false);
@@ -508,10 +516,11 @@ export default function AdminDashboardPage() {
 
     const refs = chartRefs.current;
     const runAggregate = () => {
-      const se1 = getStartEnd(trendRange);
-      const se2 = getStartEnd(requestTrendRange);
-      const se3 = getStartEnd(topUsersRange);
-      const se4 = getStartEnd(requestTypesRange);
+      const r = rangeRef.current;
+      const se1 = getStartEnd(r.trendRange);
+      const se2 = getStartEnd(r.requestTrendRange);
+      const se3 = getStartEnd(r.topUsersRange);
+      const se4 = getStartEnd(r.requestTypesRange);
       const r1 = aggregateChartData(refs.shipped, refs.inventory, refs.shipReq, refs.invReq, refs.returns, refs.dispose, se1.start, se1.end, adminUid, users || []);
       const r2 = aggregateChartData(refs.shipped, refs.inventory, refs.shipReq, refs.invReq, refs.returns, refs.dispose, se2.start, se2.end, adminUid, users || []);
       const r3 = aggregateChartData(refs.shipped, refs.inventory, refs.shipReq, refs.invReq, refs.returns, refs.dispose, se3.start, se3.end, adminUid, users || []);
@@ -524,7 +533,9 @@ export default function AdminDashboardPage() {
         topUsers: r4.topUsers,
         recentActivity: r2.recentActivity,
       });
+      hasChartDataRef.current = true;
     };
+    runAggregateRef.current = runAggregate;
 
     setChartLoading(true);
     const limitQ = limit(CHART_COLLECTION_LIMIT);
@@ -604,7 +615,11 @@ export default function AdminDashboardPage() {
       unsubReturns();
       unsubDispose();
     };
-  }, [adminUser?.uid, users, hasDateRange, dateRangeFrom, dateRangeTo, trendRange, requestTrendRange, topUsersRange, requestTypesRange]);
+  }, [adminUser?.uid, users, hasDateRange, dateRangeFrom, dateRangeTo]);
+
+  useEffect(() => {
+    if (hasChartDataRef.current) runAggregateRef.current();
+  }, [trendRange, requestTrendRange, topUsersRange, requestTypesRange]);
 
   const trendChartConfig = {
     shipped: { label: "Shipped", color: "#3b82f6" },
@@ -844,7 +859,7 @@ export default function AdminDashboardPage() {
                 <Skeleton className="h-[280px] w-full rounded-lg" />
               ) : (
                 <ChartContainer config={trendChartConfig} className="h-[280px] w-full">
-                  <AreaChart data={chartData.trend}>
+                  <AreaChart data={chartData.trend} margin={{ top: 8, right: 8, left: 8, bottom: 8 }} animationDuration={400} animationEasing="ease-out">
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgb(226 232 240)" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
                     <ChartTooltip content={<ChartTooltipContent />} />
@@ -876,7 +891,7 @@ export default function AdminDashboardPage() {
                 <Skeleton className="h-[280px] w-full rounded-lg" />
               ) : (
                 <ChartContainer config={statusChartConfig} className="h-[280px] w-full">
-                  <PieChart>
+                  <PieChart animationDuration={400} animationEasing="ease-out">
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <ChartLegend content={<ChartLegendContent nameKey="name" className="grid grid-cols-2 gap-x-4 gap-y-2 justify-items-start" />} />
                     <Pie data={chartData.statusDonut} dataKey="value" nameKey="name" innerRadius={58} outerRadius={86} paddingAngle={2}>
@@ -929,7 +944,7 @@ export default function AdminDashboardPage() {
                 <Skeleton className="h-[260px] w-full rounded-lg" />
               ) : (
                 <ChartContainer config={requestTrendConfig} className="h-[260px] w-full">
-                  <AreaChart data={chartData.requestTrend}>
+                  <AreaChart data={chartData.requestTrend} margin={{ top: 8, right: 8, left: 8, bottom: 8 }} animationDuration={400} animationEasing="ease-out">
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgb(226 232 240)" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
                     <ChartTooltip content={<ChartTooltipContent />} />
@@ -972,7 +987,7 @@ export default function AdminDashboardPage() {
                 <Skeleton className="h-[260px] w-full rounded-lg" />
               ) : (
                 <ChartContainer config={topUsersConfig} className="h-[260px] w-full">
-                  <BarChart data={chartData.topUsers} layout="vertical" margin={{ left: 8, right: 8 }}>
+                  <BarChart data={chartData.topUsers} layout="vertical" margin={{ left: 8, right: 8 }} animationDuration={400} animationEasing="ease-out">
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgb(226 232 240)" />
                     <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} />
                     <YAxis type="category" dataKey="user" tickLine={false} axisLine={false} width={92} />
@@ -1023,7 +1038,7 @@ export default function AdminDashboardPage() {
                 <Skeleton className="h-[260px] w-full rounded-lg" />
               ) : (
                 <ChartContainer config={requestTypesChartConfig} className="h-[260px] w-full">
-                  <BarChart data={chartData.requestTypes} layout="vertical" margin={{ left: 18, right: 18 }}>
+                  <BarChart data={chartData.requestTypes} layout="vertical" margin={{ left: 18, right: 18 }} animationDuration={400} animationEasing="ease-out">
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgb(226 232 240)" />
                     <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} />
                     <YAxis type="category" dataKey="type" tickLine={false} axisLine={false} width={84} />
