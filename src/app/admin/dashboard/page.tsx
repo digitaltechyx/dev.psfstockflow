@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useCollection } from "@/hooks/use-collection";
 import type { UserProfile, Invoice } from "@/types";
@@ -76,6 +76,156 @@ function isDateInRange(date: Date | null, from?: Date, to?: Date): boolean {
 type ShippedDoc = { date?: unknown; shippedQty?: number; items?: Array<{ shippedQty?: number; quantity?: number }> };
 type InventoryDoc = { dateAdded?: unknown; receivingDate?: unknown; quantity?: number };
 type RequestDoc = { status?: string; requestedAt?: unknown; date?: unknown };
+
+const CHART_COLLECTION_LIMIT = 400;
+
+function aggregateChartData(
+  shippedDocs: Array<{ ref: { path: string }; data: () => ShippedDoc }>,
+  inventoryDocs: Array<{ ref: { path: string }; data: () => InventoryDoc }>,
+  shipReqDocs: Array<{ ref: { path: string }; data: () => RequestDoc }>,
+  invReqDocs: Array<{ ref: { path: string }; data: () => RequestDoc }>,
+  returnsDocs: Array<{ ref: { path: string }; data: () => RequestDoc }>,
+  disposeDocs: Array<{ ref: { path: string }; data: () => RequestDoc }>,
+  start: Date,
+  end: Date,
+  adminUid: string,
+  users: UserProfile[]
+): typeof initialChartData {
+  const buckets = new Map<string, { label: string; shipped: number; added: number; returns: number; disposed: number }>();
+  const requestBuckets = new Map<string, { label: string; total: number }>();
+  for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
+    const d = new Date(t);
+    const key = d.toISOString().slice(0, 10);
+    buckets.set(key, { label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), shipped: 0, added: 0, returns: 0, disposed: 0 });
+    requestBuckets.set(key, { label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), total: 0 });
+  }
+  const requestTypeCounts = { Shipment: 0, Inventory: 0, Returns: 0, Dispose: 0 };
+  const statusCounts = { Pending: 0, Processing: 0, Shipped: 0, Rejected: 0 };
+  const userRequestCounts = new Map<string, number>();
+  let shippedOrderCount = 0;
+  const recentList: Array<{ id: string; type: string; userName: string; date: string; status: string; ms: number }> = [];
+
+  const uidFromPath = (path: string) => path.split("/")[1] || "";
+  const userName = (uid: string) => users?.find((u) => u.uid === uid)?.name || users?.find((u) => u.uid === uid)?.email || "User";
+
+  shippedDocs.forEach((doc) => {
+    const uid = uidFromPath(doc.ref.path);
+    if (uid === adminUid) return;
+    const data = doc.data();
+    const date = new Date(toMs(data?.date));
+    if (!isDateInRange(date, start, end)) return;
+    shippedOrderCount += 1;
+    const key = date.toISOString().slice(0, 10);
+    const bucket = buckets.get(key);
+    if (bucket) {
+      const qty = Number(data?.shippedQty ?? 0) || (Array.isArray(data?.items) ? data.items.reduce((s, i) => s + (Number(i?.shippedQty ?? i?.quantity) || 0), 0) : 0);
+      bucket.shipped += Number.isFinite(qty) ? qty : 0;
+    }
+  });
+  inventoryDocs.forEach((doc) => {
+    const uid = uidFromPath(doc.ref.path);
+    if (uid === adminUid) return;
+    const data = doc.data();
+    const date = new Date(toMs(data?.receivingDate) || toMs(data?.dateAdded));
+    if (!isDateInRange(date, start, end)) return;
+    const key = date.toISOString().slice(0, 10);
+    const bucket = buckets.get(key);
+    if (bucket) bucket.added += Number(data?.quantity) || 0;
+  });
+
+  [shipReqDocs, invReqDocs].forEach((docs, idx) => {
+    const type = idx === 0 ? "Shipment" : "Inventory";
+    docs.forEach((doc) => {
+      const uid = uidFromPath(doc.ref.path);
+      if (uid === adminUid) return;
+      const data = doc.data();
+      requestTypeCounts[type as "Shipment" | "Inventory"] += 1;
+      const status = (data?.status || "").toLowerCase();
+      if (status === "pending") statusCounts.Pending += 1;
+      else if (status === "rejected") statusCounts.Rejected += 1;
+      else statusCounts.Processing += 1;
+      const ms = toMs(data?.requestedAt || data?.date);
+      if (isDateInRange(new Date(ms), start, end)) {
+        recentList.push({ id: doc.ref.path, type, userName: userName(uid), date: new Date(ms).toLocaleDateString(), status: data?.status || "—", ms });
+        const key = new Date(ms).toISOString().slice(0, 10);
+        const bucket = requestBuckets.get(key);
+        if (bucket) bucket.total += 1;
+        userRequestCounts.set(userName(uid), (userRequestCounts.get(userName(uid)) || 0) + 1);
+      }
+    });
+  });
+  returnsDocs.forEach((doc) => {
+    const uid = uidFromPath(doc.ref.path);
+    if (uid === adminUid) return;
+    requestTypeCounts.Returns += 1;
+    const data = doc.data();
+    const status = (data?.status || "").toLowerCase();
+    if (status === "pending") statusCounts.Pending += 1;
+    else if (status === "rejected") statusCounts.Rejected += 1;
+    else statusCounts.Processing += 1;
+    const ms = toMs(data?.requestedAt || data?.date);
+    if (isDateInRange(new Date(ms), start, end)) {
+      const key = new Date(ms).toISOString().slice(0, 10);
+      const tBucket = buckets.get(key);
+      if (tBucket) tBucket.returns += 1;
+      const b = requestBuckets.get(key);
+      if (b) b.total += 1;
+      userRequestCounts.set(userName(uid), (userRequestCounts.get(userName(uid)) || 0) + 1);
+    }
+  });
+  disposeDocs.forEach((doc) => {
+    const uid = uidFromPath(doc.ref.path);
+    if (uid === adminUid) return;
+    requestTypeCounts.Dispose += 1;
+    const data = doc.data();
+    const status = (data?.status || "").toLowerCase();
+    if (status === "pending") statusCounts.Pending += 1;
+    else if (status === "rejected") statusCounts.Rejected += 1;
+    else statusCounts.Processing += 1;
+    const ms = toMs(data?.requestedAt || data?.date);
+    if (isDateInRange(new Date(ms), start, end)) {
+      const key = new Date(ms).toISOString().slice(0, 10);
+      const tBucket = buckets.get(key);
+      if (tBucket) tBucket.disposed += 1;
+      const b = requestBuckets.get(key);
+      if (b) b.total += 1;
+      userRequestCounts.set(userName(uid), (userRequestCounts.get(userName(uid)) || 0) + 1);
+    }
+  });
+
+  statusCounts.Shipped = shippedOrderCount;
+  const trend = Array.from(buckets.values());
+  const requestTrend = Array.from(requestBuckets.values());
+  const requestTypes = [
+    { type: "Shipment", count: requestTypeCounts.Shipment, fill: "var(--color-shipment)" },
+    { type: "Inventory", count: requestTypeCounts.Inventory, fill: "var(--color-inventory)" },
+    { type: "Returns", count: requestTypeCounts.Returns, fill: "var(--color-returns)" },
+    { type: "Dispose", count: requestTypeCounts.Dispose, fill: "var(--color-dispose)" },
+  ];
+  const statusDonut = [
+    { name: "Pending", value: statusCounts.Pending, fill: "#f59e0b" },
+    { name: "Processing", value: statusCounts.Processing, fill: "#3b82f6" },
+    { name: "Shipped", value: statusCounts.Shipped, fill: "#22c55e" },
+    { name: "Rejected", value: statusCounts.Rejected, fill: "#ef4444" },
+  ].filter((d) => d.value > 0);
+  const topUsers = Array.from(userRequestCounts.entries())
+    .map(([user, count]) => ({ user, count, fill: "#06b6d4" }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+  recentList.sort((a, b) => b.ms - a.ms);
+  const recentActivity = recentList.slice(0, 10).map(({ id, type, userName, date, status }) => ({ id, type, userName, date, status }));
+
+  return {
+    trend,
+    requestTrend,
+    requestTypes,
+    statusDonut: statusDonut.length ? statusDonut : [{ name: "No data", value: 1, fill: "#94a3b8" }],
+    topUsers,
+    recentActivity,
+  };
+}
+
+const initialChartData = { trend: [] as Array<{ label: string; shipped: number; added: number; returns: number; disposed: number }>, requestTrend: [], requestTypes: [], statusDonut: [{ name: "No data", value: 1, fill: "#94a3b8" }], topUsers: [], recentActivity: [] };
 
 export default function AdminDashboardPage() {
   const { userProfile: adminUser } = useAuth();
@@ -327,6 +477,15 @@ export default function AdminDashboardPage() {
   }>({ trend: [], requestTrend: [], requestTypes: [], statusDonut: [], topUsers: [], recentActivity: [] });
   const [chartLoading, setChartLoading] = useState(true);
 
+  const chartRefs = useRef({
+    shipped: [] as Array<{ ref: { path: string }; data: () => ShippedDoc }>,
+    inventory: [] as Array<{ ref: { path: string }; data: () => InventoryDoc }>,
+    shipReq: [] as Array<{ ref: { path: string }; data: () => RequestDoc }>,
+    invReq: [] as Array<{ ref: { path: string }; data: () => RequestDoc }>,
+    returns: [] as Array<{ ref: { path: string }; data: () => RequestDoc }>,
+    dispose: [] as Array<{ ref: { path: string }; data: () => RequestDoc }>,
+  });
+
   useEffect(() => {
     if (!adminUser?.uid || !users?.length) {
       setChartData({ trend: [], requestTrend: [], requestTypes: [], statusDonut: [], topUsers: [], recentActivity: [] });
@@ -344,200 +503,101 @@ export default function AdminDashboardPage() {
       end = new Date();
     }
 
-    const run = async () => {
-      setChartLoading(true);
-      try {
-        const buckets = new Map<string, { label: string; shipped: number; added: number; returns: number; disposed: number }>();
-        const requestBuckets = new Map<string, { label: string; total: number }>();
-        for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
-          const d = new Date(t);
-          const key = d.toISOString().slice(0, 10);
-          buckets.set(key, {
-            label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-            shipped: 0,
-            added: 0,
-            returns: 0,
-            disposed: 0,
-          });
-          requestBuckets.set(key, {
-            label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-            total: 0,
-          });
-        }
-
-        const requestTypeCounts = { Shipment: 0, Inventory: 0, Returns: 0, Dispose: 0 };
-        const statusCounts = { Pending: 0, Processing: 0, Shipped: 0, Rejected: 0 };
-        const userRequestCounts = new Map<string, number>();
-        let shippedOrderCount = 0;
-        const recentList: Array<{ id: string; type: string; userName: string; date: string; status: string; ms: number }> = [];
-
-        const nonAdminUserIds = (users || []).map((u) => u.uid).filter((id): id is string => !!id && id !== adminUid);
-        const BATCH_SIZE = 6;
-        const MAX_USERS = 24;
-        const userIdsToFetch = nonAdminUserIds.slice(0, MAX_USERS);
-
-        const fetchOneUser = async (uid: string) => {
-          try {
-            const [shippedSnap, inventorySnap, shipReqSnap, invReqSnap, returnsSnap, disposeSnap] = await Promise.all([
-              getDocs(collection(db, `users/${uid}/shipped`)),
-              getDocs(collection(db, `users/${uid}/inventory`)),
-              getDocs(query(collection(db, `users/${uid}/shipmentRequests`), limit(80))),
-              getDocs(query(collection(db, `users/${uid}/inventoryRequests`), limit(80))),
-              getDocs(query(collection(db, `users/${uid}/productReturns`), limit(40))),
-              getDocs(query(collection(db, `users/${uid}/disposeRequests`), limit(40))),
-            ]);
-            return { uid, shippedSnap, inventorySnap, shipReqSnap, invReqSnap, returnsSnap, disposeSnap };
-          } catch {
-            return null;
-          }
-        };
-
-        for (let i = 0; i < userIdsToFetch.length; i += BATCH_SIZE) {
-          const batch = userIdsToFetch.slice(i, i + BATCH_SIZE);
-          const results = await Promise.all(batch.map(fetchOneUser));
-          for (const res of results) {
-            if (!res) continue;
-            const { uid, shippedSnap, inventorySnap, shipReqSnap, invReqSnap, returnsSnap, disposeSnap } = res;
-            const userName = users?.find((u) => u.uid === uid)?.name || users?.find((u) => u.uid === uid)?.email || "User";
-
-            shippedSnap.docs.forEach((doc) => {
-              const data = doc.data() as ShippedDoc;
-              const date = new Date(toMs(data?.date));
-              if (!isDateInRange(date, start, end)) return;
-              shippedOrderCount += 1;
-              const key = date.toISOString().slice(0, 10);
-              const bucket = buckets.get(key);
-              if (bucket) {
-                const qty = Number(data?.shippedQty ?? 0) || (Array.isArray(data?.items) ? data.items.reduce((s, i) => s + (Number(i?.shippedQty ?? i?.quantity) || 0), 0) : 0);
-                bucket.shipped += Number.isFinite(qty) ? qty : 0;
-              }
-            });
-            inventorySnap.docs.forEach((doc) => {
-              const data = doc.data() as InventoryDoc;
-              const date = new Date(toMs(data?.receivingDate) || toMs(data?.dateAdded));
-              if (!isDateInRange(date, start, end)) return;
-              const key = date.toISOString().slice(0, 10);
-              const bucket = buckets.get(key);
-              if (bucket) bucket.added += Number(data?.quantity) || 0;
-            });
-
-            shipReqSnap.docs.forEach((doc) => {
-              const data = doc.data() as RequestDoc;
-              requestTypeCounts.Shipment += 1;
-              const status = (data?.status || "").toLowerCase();
-              if (status === "pending") statusCounts.Pending += 1;
-              else if (status === "rejected") statusCounts.Rejected += 1;
-              else if (["approved", "in_progress", "confirmed", "shipped"].includes(status)) statusCounts.Processing += 1;
-              const ms = toMs(data?.requestedAt || data?.date);
-              if (isDateInRange(new Date(ms), start, end)) {
-                recentList.push({ id: doc.id, type: "Shipment", userName, date: new Date(ms).toLocaleDateString(), status: data?.status || "—", ms });
-                const key = new Date(ms).toISOString().slice(0, 10);
-                const bucket = requestBuckets.get(key);
-                if (bucket) bucket.total += 1;
-                userRequestCounts.set(userName, (userRequestCounts.get(userName) || 0) + 1);
-              }
-            });
-            invReqSnap.docs.forEach((doc) => {
-              const data = doc.data() as RequestDoc;
-              requestTypeCounts.Inventory += 1;
-              const status = (data?.status || "").toLowerCase();
-              if (status === "pending") statusCounts.Pending += 1;
-              else if (status === "rejected") statusCounts.Rejected += 1;
-              else statusCounts.Processing += 1;
-              const ms = toMs(data?.requestedAt || data?.date);
-              if (isDateInRange(new Date(ms), start, end)) {
-                recentList.push({ id: doc.id, type: "Inventory", userName, date: new Date(ms).toLocaleDateString(), status: data?.status || "—", ms });
-                const key = new Date(ms).toISOString().slice(0, 10);
-                const bucket = requestBuckets.get(key);
-                if (bucket) bucket.total += 1;
-                userRequestCounts.set(userName, (userRequestCounts.get(userName) || 0) + 1);
-              }
-            });
-            returnsSnap.docs.forEach((doc) => {
-              requestTypeCounts.Returns += 1;
-              const data = doc.data() as RequestDoc;
-              const status = (data?.status || "").toLowerCase();
-              if (status === "pending") statusCounts.Pending += 1;
-              else if (status === "rejected") statusCounts.Rejected += 1;
-              else statusCounts.Processing += 1;
-              const ms = toMs(data?.requestedAt || data?.date);
-              if (isDateInRange(new Date(ms), start, end)) {
-                const tKey = new Date(ms).toISOString().slice(0, 10);
-                const tBucket = buckets.get(tKey);
-                if (tBucket) tBucket.returns += 1;
-                const key = new Date(ms).toISOString().slice(0, 10);
-                const bucket = requestBuckets.get(key);
-                if (bucket) bucket.total += 1;
-                userRequestCounts.set(userName, (userRequestCounts.get(userName) || 0) + 1);
-              }
-            });
-            disposeSnap.docs.forEach((doc) => {
-              requestTypeCounts.Dispose += 1;
-              const data = doc.data() as RequestDoc;
-              const status = (data?.status || "").toLowerCase();
-              if (status === "pending") statusCounts.Pending += 1;
-              else if (status === "rejected") statusCounts.Rejected += 1;
-              else statusCounts.Processing += 1;
-              const ms = toMs(data?.requestedAt || data?.date);
-              if (isDateInRange(new Date(ms), start, end)) {
-                const tKey = new Date(ms).toISOString().slice(0, 10);
-                const tBucket = buckets.get(tKey);
-                if (tBucket) tBucket.disposed += 1;
-                const key = new Date(ms).toISOString().slice(0, 10);
-                const bucket = requestBuckets.get(key);
-                if (bucket) bucket.total += 1;
-                userRequestCounts.set(userName, (userRequestCounts.get(userName) || 0) + 1);
-              }
-            });
-          }
-        }
-
-        statusCounts.Shipped = shippedOrderCount;
-
-        const trend = Array.from(buckets.values());
-        const requestTrend = Array.from(requestBuckets.values());
-        const requestTypes = [
-          { type: "Shipment", count: requestTypeCounts.Shipment, fill: "var(--color-shipment)" },
-          { type: "Inventory", count: requestTypeCounts.Inventory, fill: "var(--color-inventory)" },
-          { type: "Returns", count: requestTypeCounts.Returns, fill: "var(--color-returns)" },
-          { type: "Dispose", count: requestTypeCounts.Dispose, fill: "var(--color-dispose)" },
-        ];
-        const statusDonut = [
-          { name: "Pending", value: statusCounts.Pending, fill: "#f59e0b" },
-          { name: "Processing", value: statusCounts.Processing, fill: "#3b82f6" },
-          { name: "Shipped", value: statusCounts.Shipped, fill: "#22c55e" },
-          { name: "Rejected", value: statusCounts.Rejected, fill: "#ef4444" },
-        ].filter((d) => d.value > 0);
-        const topUsers = Array.from(userRequestCounts.entries())
-          .map(([user, count]) => ({ user, count, fill: "#06b6d4" }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 6);
-
-        recentList.sort((a, b) => b.ms - a.ms);
-        const recentActivity = recentList.slice(0, 10).map(({ id, type, userName, date, status }) => ({ id, type, userName, date, status }));
-
-        setChartData({
-          trend,
-          requestTrend,
-          requestTypes,
-          statusDonut: statusDonut.length ? statusDonut : [{ name: "No data", value: 1, fill: "#94a3b8" }],
-          topUsers,
-          recentActivity,
-        });
-      } catch {
-        setChartData({
-          trend: [],
-          requestTrend: [],
-          requestTypes: [],
-          statusDonut: [{ name: "No data", value: 1, fill: "#94a3b8" }],
-          topUsers: [],
-          recentActivity: [],
-        });
-      } finally {
-        setChartLoading(false);
-      }
+    const refs = chartRefs.current;
+    const runAggregate = () => {
+      const next = aggregateChartData(
+        refs.shipped,
+        refs.inventory,
+        refs.shipReq,
+        refs.invReq,
+        refs.returns,
+        refs.dispose,
+        start,
+        end,
+        adminUid,
+        users || []
+      );
+      setChartData(next);
     };
-    run();
+
+    setChartLoading(true);
+    const limitQ = limit(CHART_COLLECTION_LIMIT);
+    const qShipped = query(collectionGroup(db, "shipped"), limitQ);
+    const qInventory = query(collectionGroup(db, "inventory"), limitQ);
+    const qShipReq = query(collectionGroup(db, "shipmentRequests"), limitQ);
+    const qInvReq = query(collectionGroup(db, "inventoryRequests"), limitQ);
+    const qReturns = query(collectionGroup(db, "productReturns"), limitQ);
+    const qDispose = query(collectionGroup(db, "disposeRequests"), limitQ);
+
+    let initialDone = false;
+    const maybeInitialDone = () => {
+      if (initialDone) return;
+      initialDone = true;
+      setChartLoading(false);
+    };
+
+    Promise.all([
+      getDocs(qShipped),
+      getDocs(qInventory),
+      getDocs(qShipReq),
+      getDocs(qInvReq),
+      getDocs(qReturns),
+      getDocs(qDispose),
+    ])
+      .then(([a, b, c, d, e, f]) => {
+        refs.shipped = a.docs as unknown as typeof refs.shipped;
+        refs.inventory = b.docs as unknown as typeof refs.inventory;
+        refs.shipReq = c.docs as unknown as typeof refs.shipReq;
+        refs.invReq = d.docs as unknown as typeof refs.invReq;
+        refs.returns = e.docs as unknown as typeof refs.returns;
+        refs.dispose = f.docs as unknown as typeof refs.dispose;
+        runAggregate();
+        maybeInitialDone();
+      })
+      .catch(() => {
+        setChartData({ trend: [], requestTrend: [], requestTypes: [], statusDonut: [{ name: "No data", value: 1, fill: "#94a3b8" }], topUsers: [], recentActivity: [] });
+        maybeInitialDone();
+      });
+
+    const unsubShipped = onSnapshot(qShipped, (snap) => {
+      refs.shipped = snap.docs as unknown as typeof refs.shipped;
+      runAggregate();
+      maybeInitialDone();
+    }, maybeInitialDone);
+    const unsubInventory = onSnapshot(qInventory, (snap) => {
+      refs.inventory = snap.docs as unknown as typeof refs.inventory;
+      runAggregate();
+      maybeInitialDone();
+    }, maybeInitialDone);
+    const unsubShipReq = onSnapshot(qShipReq, (snap) => {
+      refs.shipReq = snap.docs as unknown as typeof refs.shipReq;
+      runAggregate();
+      maybeInitialDone();
+    }, maybeInitialDone);
+    const unsubInvReq = onSnapshot(qInvReq, (snap) => {
+      refs.invReq = snap.docs as unknown as typeof refs.invReq;
+      runAggregate();
+      maybeInitialDone();
+    }, maybeInitialDone);
+    const unsubReturns = onSnapshot(qReturns, (snap) => {
+      refs.returns = snap.docs as unknown as typeof refs.returns;
+      runAggregate();
+      maybeInitialDone();
+    }, maybeInitialDone);
+    const unsubDispose = onSnapshot(qDispose, (snap) => {
+      refs.dispose = snap.docs as unknown as typeof refs.dispose;
+      runAggregate();
+      maybeInitialDone();
+    }, maybeInitialDone);
+
+    return () => {
+      unsubShipped();
+      unsubInventory();
+      unsubShipReq();
+      unsubInvReq();
+      unsubReturns();
+      unsubDispose();
+    };
   }, [adminUser?.uid, users, hasDateRange, dateRangeFrom, dateRangeTo, trendRange]);
 
   const trendChartConfig = {
@@ -829,14 +889,33 @@ export default function AdminDashboardPage() {
         <section className="grid gap-6 lg:grid-cols-12">
           <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-6">
             <CardHeader className="pb-2 pt-6 px-6">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-fuchsia-500/10 text-fuchsia-600">
-                  <TrendingUp className="h-4 w-4" />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-fuchsia-500/10 text-fuchsia-600">
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-semibold text-slate-900">Request volume over time</CardTitle>
+                    <CardDescription className="text-slate-500">Daily request activity — {hasDateRange ? "date range" : `${trendRange}d view`}</CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-base font-semibold text-slate-900">Request volume over time</CardTitle>
-                  <CardDescription className="text-slate-500">Daily request activity</CardDescription>
-                </div>
+                {!hasDateRange && (
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50/80 p-1">
+                    {([7, 14, 30] as const).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setTrendRange(d)}
+                        className={cn(
+                          "rounded-md px-3 py-1.5 text-xs font-medium transition",
+                          trendRange === d ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                        )}
+                      >
+                        {d}d
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardHeader>
             <CardContent className="px-6 pb-6">
@@ -858,8 +937,29 @@ export default function AdminDashboardPage() {
 
           <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-6">
             <CardHeader className="pb-2 pt-6 px-6">
-              <CardTitle className="text-base font-semibold text-slate-900">Top users by request volume</CardTitle>
-              <CardDescription className="text-slate-500">Most active users in selected period</CardDescription>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Top users by request volume</CardTitle>
+                  <CardDescription className="text-slate-500">Most active users — {hasDateRange ? "date range" : `last ${trendRange} days`}</CardDescription>
+                </div>
+                {!hasDateRange && (
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50/80 p-1">
+                    {([7, 14, 30] as const).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setTrendRange(d)}
+                        className={cn(
+                          "rounded-md px-3 py-1.5 text-xs font-medium transition",
+                          trendRange === d ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                        )}
+                      >
+                        {d}d
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="px-6 pb-6">
               {chartLoading ? (
@@ -883,14 +983,33 @@ export default function AdminDashboardPage() {
         <section className="grid gap-6 lg:grid-cols-12">
           <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:col-span-12">
             <CardHeader className="pb-2 pt-6 px-6">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
-                  <BarChart3 className="h-4 w-4" />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
+                    <BarChart3 className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-semibold text-slate-900">Requests by type</CardTitle>
+                    <CardDescription className="text-slate-500">Shipment, inventory, returns, dispose — {hasDateRange ? "date range" : `${trendRange}d view`}</CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-base font-semibold text-slate-900">Requests by type</CardTitle>
-                  <CardDescription className="text-slate-500">Separate analytics section across all users</CardDescription>
-                </div>
+                {!hasDateRange && (
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50/80 p-1">
+                    {([7, 14, 30] as const).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setTrendRange(d)}
+                        className={cn(
+                          "rounded-md px-3 py-1.5 text-xs font-medium transition",
+                          trendRange === d ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                        )}
+                      >
+                        {d}d
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardHeader>
             <CardContent className="px-6 pb-6">

@@ -396,8 +396,8 @@ export default function DashboardPage() {
     { title: "Total Inventory", value: String(totalItemsInInventory), hint: "Units across all products", icon: Boxes, iconBg: "bg-blue-500/10 text-blue-600" },
     { title: "Low Stock SKUs", value: String(lowStockItems.length), hint: "Qty ≤ 10", icon: AlertTriangle, iconBg: "bg-amber-500/10 text-amber-600" },
     { title: "Orders Pending", value: String(pendingFulfillmentCount), hint: "Awaiting fulfillment", icon: Clock3, iconBg: "bg-orange-500/10 text-orange-600" },
-    { title: "Pending Invoice", value: invoicesLoading ? "..." : `$${totalPendingAmount.toFixed(2)}`, hint: "Outstanding balance", icon: DollarSign, iconBg: "bg-emerald-500/10 text-emerald-600" },
     { title: hasDateRange ? "Shipped in period" : "Today Shipped", value: String(todaysShippedOrders), hint: hasDateRange ? "In selected date range" : "Shipped today", icon: Truck, iconBg: "bg-violet-500/10 text-violet-600" },
+    { title: "Pending Invoice", value: invoicesLoading ? "..." : `$${totalPendingAmount.toFixed(2)}`, hint: "Outstanding balance", icon: DollarSign, iconBg: "bg-emerald-500/10 text-emerald-600" },
     { title: "Integration Health", value: shopifyConnectionsLoading || ebayConnectionsLoading ? "..." : `${integrationHealth.pct}%`, hint: integrationHealth.label, icon: RefreshCw, iconBg: "bg-teal-500/10 text-teal-600" },
   ];
 
