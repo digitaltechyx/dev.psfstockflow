@@ -449,6 +449,25 @@ export function ProfileSection() {
             />
           </div>
 
+          {userProfile?.clientId && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Hash className="h-4 w-4 text-muted-foreground" />
+                <Label htmlFor="clientId">Client ID</Label>
+              </div>
+              <Input
+                id="clientId"
+                type="text"
+                value={userProfile.clientId}
+                disabled
+                className="bg-muted font-mono"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Your unique 5-digit ID. Use this when contacting support or for reference.
+              </p>
+            </div>
+          )}
+
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />

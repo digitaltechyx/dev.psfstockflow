@@ -16,14 +16,19 @@ import { CreateUserForm } from "@/components/admin/create-user-form";
 import { MemberManagement } from "@/components/admin/member-management";
 import { CommissionAgentsManagement } from "@/components/admin/commission-agents-management";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import { getUserRoles, hasRole } from "@/lib/permissions";
+import { assignClientIdsToExistingUsers } from "@/lib/client-id";
+import { Hash, Loader2 } from "lucide-react";
 
 export default function AdminUsersPage() {
   const searchParams = useSearchParams();
   const { userProfile: adminUser } = useAuth();
+  const { toast } = useToast();
   const { managedUsers: users, loading: usersLoading, isSubAdmin } = useManagedUsers();
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateUser, setShowCreateUser] = useState(false);
+  const [isAssigningIds, setIsAssigningIds] = useState(false);
   const tabFromUrl = searchParams.get("tab");
   const statusFromUrl = searchParams.get("status") as "pending" | "approved" | "deleted" | null;
   const [activeTab, setActiveTab] = useState<"users" | "commission_agents">(
@@ -52,8 +57,9 @@ export default function AdminUsersPage() {
         const name = user.name?.toLowerCase() || "";
         const email = user.email?.toLowerCase() || "";
         const phone = user.phone?.toLowerCase() || "";
+        const clientId = user.clientId?.toLowerCase() || "";
         const term = searchTerm.toLowerCase();
-        return name.includes(term) || email.includes(term) || phone.includes(term);
+        return name.includes(term) || email.includes(term) || phone.includes(term) || clientId.includes(term);
       });
   }, [users, adminUser, searchTerm]);
 
@@ -68,6 +74,39 @@ export default function AdminUsersPage() {
   const pendingUsersCount = users.filter((user) => 
     user.uid !== adminUser?.uid && user.status === "pending"
   ).length;
+
+  const usersWithoutClientIdCount = useMemo(
+    () => users.filter((u) => u.uid && !u.clientId).length,
+    [users]
+  );
+
+  const handleAssignClientIds = async () => {
+    if (usersWithoutClientIdCount === 0) return;
+    setIsAssigningIds(true);
+    try {
+      const { assigned, errors } = await assignClientIdsToExistingUsers(users);
+      if (errors.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Partially complete",
+          description: `Assigned ${assigned} client ID(s). ${errors.length} error(s): ${errors.slice(0, 2).join("; ")}${errors.length > 2 ? "…" : ""}`,
+        });
+      } else {
+        toast({
+          title: "Done",
+          description: `Assigned client IDs to ${assigned} user(s). The list will update automatically.`,
+        });
+      }
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: e instanceof Error ? e.message : "Failed to assign client IDs.",
+      });
+    } finally {
+      setIsAssigningIds(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -94,7 +133,7 @@ export default function AdminUsersPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search users by name, email, or phone..."
+                  placeholder="Search by name, email, phone, or client ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 h-11 shadow-sm"
@@ -102,13 +141,30 @@ export default function AdminUsersPage() {
               </div>
             </div>
             {!isSubAdmin && (
-            <Dialog open={showCreateUser} onOpenChange={setShowCreateUser}>
-              <DialogTrigger asChild>
-                <Button className="flex items-center gap-2 shadow-sm">
-                  <UserPlus className="h-4 w-4" />
-                  Create User
+            <>
+              {usersWithoutClientIdCount > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex items-center gap-2 shadow-sm"
+                  onClick={handleAssignClientIds}
+                  disabled={isAssigningIds}
+                >
+                  {isAssigningIds ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Hash className="h-4 w-4" />
+                  )}
+                  Assign client IDs ({usersWithoutClientIdCount})
                 </Button>
-              </DialogTrigger>
+              )}
+              <Dialog open={showCreateUser} onOpenChange={setShowCreateUser}>
+                <DialogTrigger asChild>
+                  <Button className="flex items-center gap-2 shadow-sm">
+                    <UserPlus className="h-4 w-4" />
+                    Create User
+                  </Button>
+                </DialogTrigger>
               <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create New User</DialogTitle>
@@ -122,6 +178,7 @@ export default function AdminUsersPage() {
                 />
               </DialogContent>
             </Dialog>
+            </>
             )}
           </div>
 

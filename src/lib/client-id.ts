@@ -1,4 +1,4 @@
-import { doc, runTransaction } from "firebase/firestore";
+import { doc, runTransaction, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 const COUNTER_REF = "system/clientIdCounter";
@@ -19,4 +19,27 @@ export async function generateClientId(): Promise<string> {
     transaction.set(ref, { lastUsed: next }, { merge: true });
     return String(next);
   });
+}
+
+/**
+ * Assigns client IDs to users who don't have one (e.g. existing users created before clientId was added).
+ * Call from admin UI to backfill. Runs sequentially to avoid transaction contention.
+ */
+export async function assignClientIdsToExistingUsers(
+  users: Array<{ uid: string; clientId?: string | null }>
+): Promise<{ assigned: number; errors: string[] }> {
+  const withoutId = users.filter((u) => u.uid && !u.clientId);
+  const errors: string[] = [];
+  let assigned = 0;
+  for (const user of withoutId) {
+    try {
+      const id = await generateClientId();
+      await updateDoc(doc(db, "users", user.uid), { clientId: id });
+      assigned++;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      errors.push(`${user.uid}: ${msg}`);
+    }
+  }
+  return { assigned, errors };
 }

@@ -25,6 +25,7 @@ import { Loader2, Shield, Zap, RotateCcw, MapPin, Users, UserCheck } from "lucid
 import type { UserProfile, UserRole, UserFeature } from "@/types";
 import { getUserRoles, getDefaultFeaturesForRole } from "@/lib/permissions";
 import { generateUniqueReferralCode } from "@/lib/commission-utils";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 
 interface RoleFeatureManagementProps {
   user: UserProfile;
@@ -421,7 +422,7 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
                           }}
                         />
                         <label htmlFor={`assign-${u.uid}`} className="text-sm cursor-pointer">
-                          {u.name || u.email || u.uid}
+                          {formatUserDisplayName(u, { showEmail: false })}
                           {(u.locations?.length ?? 0) > 0 && (
                             <Badge variant="secondary" className="ml-2 text-xs">{(u.locations?.length ?? 0)} loc</Badge>
                           )}
@@ -472,7 +473,7 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
                           }}
                         />
                         <label htmlFor={`affiliate-${u.uid}`} className="text-sm cursor-pointer">
-                          {u.name || u.email || u.uid}
+                          {formatUserDisplayName(u, { showEmail: false })}
                           {(u.locations?.length ?? 0) > 0 && (
                             <Badge variant="secondary" className="ml-2 text-xs">{(u.locations?.length ?? 0)} loc</Badge>
                           )}

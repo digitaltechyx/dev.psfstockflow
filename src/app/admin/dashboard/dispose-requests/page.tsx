@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Users, ChevronsUpDown, Search, X, RotateCcw } from "lucide-react";
 import { hasRole } from "@/lib/permissions";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 
 function DisposeRequestsContent() {
   const router = useRouter();
@@ -98,7 +99,8 @@ function DisposeRequestsContent() {
                   <div className="max-h-[400px] overflow-y-auto space-y-1">
                     {selectableUsers.filter(user =>
                       user.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-                      user.email?.toLowerCase().includes(userSearchQuery.toLowerCase())
+                      user.email?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+                      user.clientId?.toLowerCase().includes(userSearchQuery.toLowerCase())
                     ).map((user) => (
                       <Button
                         key={user.uid}
@@ -107,7 +109,7 @@ function DisposeRequestsContent() {
                         onClick={() => handleUserSelect(user)}
                       >
                         <div className="flex flex-col items-start">
-                          <span className="font-medium">{user.name || "Unknown"}</span>
+                          <span className="font-medium">{formatUserDisplayName(user, { showEmail: false })}</span>
                           <span className="text-xs text-muted-foreground">{user.email}</span>
                         </div>
                       </Button>
@@ -123,7 +125,7 @@ function DisposeRequestsContent() {
             >
               <span className="truncate">
                 {selectedUser
-                  ? `${selectedUser.name} (${selectedUser.email})`
+                  ? formatUserDisplayName(selectedUser, { showEmail: true })
                   : "Select a user"}
               </span>
               <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />

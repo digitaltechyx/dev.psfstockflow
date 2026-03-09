@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 import { useCollection } from "@/hooks/use-collection";
 import { createLocation, removeLocation } from "@/lib/locations";
 import type { Location as LocationType, UserProfile } from "@/types";
@@ -223,7 +224,7 @@ export function AssignLocationTab() {
                             htmlFor={`user-${u.uid}`}
                             className="text-sm cursor-pointer"
                           >
-                            {u.name || u.email || u.uid}
+                            {formatUserDisplayName(u, { showEmail: false })}
                             {(u.locations?.length ?? 0) > 0 && (
                               <Badge variant="secondary" className="ml-2">
                                 {(u.locations?.length ?? 0)} loc

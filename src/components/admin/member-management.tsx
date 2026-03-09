@@ -22,6 +22,7 @@ import type { UserProfile } from "@/types";
 import { EditUserForm } from "./edit-user-form";
 import { RoleFeatureManagement } from "./role-feature-management";
 import { getDefaultFeaturesForRole, getUserRoles } from "@/lib/permissions";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 
 interface MemberManagementProps {
   adminUser: UserProfile | null;
@@ -276,7 +277,7 @@ export function MemberManagement({ adminUser, initialStatus, usersOverride, view
             <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <h3 className="font-semibold text-base truncate">{user.name}</h3>
+            <h3 className="font-semibold text-base truncate">{formatUserDisplayName(user, { showEmail: false })}</h3>
             <p className="text-sm text-muted-foreground truncate">{user.email}</p>
           </div>
         </div>

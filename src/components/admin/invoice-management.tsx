@@ -20,6 +20,7 @@ import { createCommissionForInvoice } from "@/lib/commission-utils";
 import { DollarSign } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { hasRole } from "@/lib/permissions";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 
 interface InvoiceManagementProps {
   users: UserProfile[];
@@ -753,7 +754,7 @@ export function InvoiceManagement({ users, initialTab }: InvoiceManagementProps)
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <CardTitle className="text-lg">{user.name || 'Unnamed User'}</CardTitle>
+                        <CardTitle className="text-lg">{formatUserDisplayName(user, { showEmail: false })}</CardTitle>
                         <CardDescription className="mt-1">{user.email}</CardDescription>
                       </div>
                       {pendingCount > 0 && (
@@ -1776,7 +1777,7 @@ export function InvoiceManagement({ users, initialTab }: InvoiceManagementProps)
                 <SelectContent>
                   {users.map((u) => (
                     <SelectItem key={u.uid} value={u.uid}>
-                      {(u.name || u.email || u.uid).toString()}
+                      {formatUserDisplayName(u, { showEmail: true })}
                     </SelectItem>
                   ))}
                 </SelectContent>

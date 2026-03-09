@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Package, ChevronsUpDown, Search, X } from "lucide-react";
 import { hasRole } from "@/lib/permissions";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 import { cn } from "@/lib/utils";
 
 function ProductReturnsContent() {
@@ -96,7 +97,8 @@ function ProductReturnsContent() {
                   <div className="max-h-[360px] overflow-y-auto space-y-1 pr-1 rounded-lg border bg-muted/30 p-2">
                     {selectableUsers.filter(user =>
                       user.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-                      user.email?.toLowerCase().includes(userSearchQuery.toLowerCase())
+                      user.email?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+                      user.clientId?.toLowerCase().includes(userSearchQuery.toLowerCase())
                     ).map((user) => (
                       <Button
                         key={user.uid}
@@ -108,7 +110,7 @@ function ProductReturnsContent() {
                         onClick={() => handleUserSelect(user)}
                       >
                         <div className="flex flex-col items-start text-left">
-                          <span className="font-medium">{user.name || "Unknown"}</span>
+                          <span className="font-medium">{formatUserDisplayName(user, { showEmail: false })}</span>
                           <span className="text-xs text-muted-foreground">{user.email}</span>
                         </div>
                       </Button>
@@ -124,7 +126,7 @@ function ProductReturnsContent() {
             >
               <span className="truncate">
                 {selectedUser
-                  ? `${selectedUser.name} (${selectedUser.email})`
+                  ? formatUserDisplayName(selectedUser, { showEmail: true })
                   : "Select a user"}
               </span>
               <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />

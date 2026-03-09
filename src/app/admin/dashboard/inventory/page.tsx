@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { hasRole } from "@/lib/permissions";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 import { clearFirestoreCache as clearCache } from "@/lib/firebase";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -200,7 +201,7 @@ function InventoryContent() {
                     >
                       <span className="truncate text-left flex-1 min-w-0 mr-2">
                         {selectedUser
-                          ? `${selectedUser.name || 'Unnamed User'} (${selectedUser.email})`
+                          ? formatUserDisplayName(selectedUser, { showEmail: true })
                           : selectableUsers.length === 0
                           ? "No users available"
                           : "Select a user to manage inventory"}
@@ -222,7 +223,8 @@ function InventoryContent() {
                             const normalized = userSearchQuery.trim().toLowerCase();
                             const matches = selectableUsers.filter(user =>
                               user.name?.toLowerCase().includes(normalized) ||
-                              user.email?.toLowerCase().includes(normalized)
+                              user.email?.toLowerCase().includes(normalized) ||
+                              user.clientId?.toLowerCase().includes(normalized)
                             );
                             const first = matches[0];
                             if (first) {
@@ -236,7 +238,8 @@ function InventoryContent() {
                       {selectableUsers
                         .filter(user =>
                           user.name?.toLowerCase().includes(userSearchQuery.trim().toLowerCase()) ||
-                          user.email?.toLowerCase().includes(userSearchQuery.trim().toLowerCase())
+                          user.email?.toLowerCase().includes(userSearchQuery.trim().toLowerCase()) ||
+                          user.clientId?.toLowerCase().includes(userSearchQuery.trim().toLowerCase())
                         )
                         .map((user, index) => (
                           <div
@@ -254,7 +257,7 @@ function InventoryContent() {
                             }}
                           >
                             <span className="truncate flex-1">
-                              {user.name || 'Unnamed User'} ({user.email})
+                              {formatUserDisplayName(user, { showEmail: true })}
                             </span>
                             {selectedUser?.uid === user.uid && (
                               <span className="text-primary">✓</span>

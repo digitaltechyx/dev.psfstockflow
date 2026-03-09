@@ -404,6 +404,12 @@ export default function DashboardPage() {
   return (
     <div className="min-h-full bg-neutral-50/80">
       <div className="mx-auto max-w-[1600px] space-y-8 px-4 py-6 md:px-6">
+        {userProfile?.clientId && (
+          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
+            <span>Your client ID:</span>
+            <span className="font-mono font-semibold text-foreground">#{userProfile.clientId}</span>
+          </div>
+        )}
         {/* KPI cards - soft shadows, rounded-xl */}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {kpiCards.map((kpi) => {

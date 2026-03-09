@@ -28,6 +28,7 @@ import { useManagedUsers } from "@/hooks/use-managed-users";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { hasRole } from "@/lib/permissions";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 import { ShoppingBag, Users, ChevronsUpDown, ExternalLink, Truck, Loader2 } from "lucide-react";
 import type { UserProfile, ShopifyOrder } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -209,7 +210,7 @@ function ShopifyOrdersContent() {
                     >
                       <span className="truncate text-left flex-1 mr-2">
                         {selectedUser
-                          ? `${selectedUser.name || "User"} (${selectedUser.email})`
+                          ? formatUserDisplayName(selectedUser, { showEmail: true })
                           : selectableUsers.length === 0
                             ? "No users"
                             : "Select user"}
@@ -232,7 +233,8 @@ function ShopifyOrdersContent() {
                           (u) =>
                             !userSearchQuery.trim() ||
                             (u.name || "").toLowerCase().includes(userSearchQuery.trim().toLowerCase()) ||
-                            (u.email || "").toLowerCase().includes(userSearchQuery.trim().toLowerCase())
+                            (u.email || "").toLowerCase().includes(userSearchQuery.trim().toLowerCase()) ||
+                            (u.clientId || "").toLowerCase().includes(userSearchQuery.trim().toLowerCase())
                         )
                         .map((u) => (
                           <div
@@ -245,7 +247,7 @@ function ShopifyOrdersContent() {
                             onClick={() => handleUserSelect(u)}
                           >
                             <span className="truncate flex-1">
-                              {u.name || "User"} ({u.email})
+                              {formatUserDisplayName(u, { showEmail: true })}
                             </span>
                             {selectedUser?.uid === u.uid && <span className="text-primary">✓</span>}
                           </div>

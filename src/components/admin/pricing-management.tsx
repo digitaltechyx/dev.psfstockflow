@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 import { collection, addDoc, updateDoc, doc, Timestamp, writeBatch } from "firebase/firestore";
 import { Users, ChevronsUpDown, Search, X, Loader2, Save } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -829,7 +830,8 @@ export function PricingManagement({ users }: PricingManagementProps) {
     return selectableUsers.filter(
       (user) =>
         user.name?.toLowerCase().includes(query) ||
-        user.email?.toLowerCase().includes(query)
+        user.email?.toLowerCase().includes(query) ||
+        user.clientId?.toLowerCase().includes(query)
     );
   }, [selectableUsers, userSearchQuery]);
 
@@ -892,7 +894,7 @@ export function PricingManagement({ users }: PricingManagementProps) {
                           onClick={() => handleUserSelect(user)}
                         >
                           <div className="flex flex-col items-start">
-                            <span className="font-medium">{user.name || "Unknown"}</span>
+                            <span className="font-medium">{formatUserDisplayName(user, { showEmail: false })}</span>
                             <span className="text-xs text-muted-foreground">{user.email}</span>
                           </div>
                         </Button>
@@ -908,7 +910,7 @@ export function PricingManagement({ users }: PricingManagementProps) {
               >
                 <span>
                   {selectedUser
-                    ? `${selectedUser.name} (${selectedUser.email})`
+                    ? formatUserDisplayName(selectedUser, { showEmail: true })
                     : "Select a user"}
                 </span>
                 <ChevronsUpDown className="h-4 w-4 opacity-50" />

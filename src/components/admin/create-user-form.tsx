@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { auth, db } from "@/lib/firebase";
 import { Loader2, UserPlus, Shield, Zap, MapPin, Users } from "lucide-react";
 import { getDefaultFeaturesForRole } from "@/lib/permissions";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 import type { UserProfile, UserRole, UserFeature } from "@/types";
 
 const createUserSchema = z.object({
@@ -146,6 +147,7 @@ export function CreateUserForm({ onSuccess, onCancel }: CreateUserFormProps) {
         features: userFeatures,
         status: values.role === "sub_admin" ? "approved" : "pending",
         createdAt: new Date(),
+        clientId: await generateClientId(),
       };
       if (values.role === "sub_admin") {
         profileData.managedLocationIds = subAdminManagedLocationIds;
@@ -527,7 +529,7 @@ export function CreateUserForm({ onSuccess, onCancel }: CreateUserFormProps) {
                                   );
                                 }}
                               />
-                              <span className="text-sm">{u.name || u.email || u.uid}</span>
+                              <span className="text-sm">{formatUserDisplayName(u, { showEmail: false })}</span>
                               {(u.locations?.length ?? 0) > 0 && (
                                 <Badge variant="secondary" className="text-xs">{u.locations!.length} loc</Badge>
                               )}

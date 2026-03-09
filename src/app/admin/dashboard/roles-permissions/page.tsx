@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 
 export default function RolesPermissionsPage() {
   const router = useRouter();
@@ -219,7 +220,7 @@ export default function RolesPermissionsPage() {
                   <SelectContent>
                     {sortedUsersForSelect.map((u) => (
                       <SelectItem key={u.uid} value={u.uid}>
-                        {u.name || u.email || u.uid} {u.email ? `(${u.email})` : ""}
+                        {formatUserDisplayName(u, { showEmail: true })}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Package, Users, ChevronsUpDown, Check, Boxes, AlertTriangle, Truck, Clock } from "lucide-react";
 import { AdminInventoryManagement } from "@/components/admin/admin-inventory-management";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatUserDisplayName } from "@/lib/format-user-display";
 
 type ShipmentRequestLite = { status?: string };
 
@@ -219,7 +220,7 @@ export default function AdminInventoryManagementPage() {
                       >
                         <span className="truncate text-left flex-1 min-w-0 mr-2">
                           {selectedUser
-                            ? `${selectedUser.name || "Unnamed User"} (${selectedUser.email})`
+                            ? formatUserDisplayName(selectedUser, { showEmail: true })
                             : "Select a user to manage inventory"}
                         </span>
                         <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
@@ -240,7 +241,8 @@ export default function AdminInventoryManagementPage() {
                               const matches = approvedUsers.filter(
                                 (user) =>
                                   user.name?.toLowerCase().includes(normalized) ||
-                                  user.email?.toLowerCase().includes(normalized)
+                                  user.email?.toLowerCase().includes(normalized) ||
+                                  user.clientId?.toLowerCase().includes(normalized)
                               );
                               const first = matches[0] ?? approvedUsers[0];
                               if (first) {
@@ -280,14 +282,15 @@ export default function AdminInventoryManagementPage() {
                             >
                               <Check className={`h-4 w-4 shrink-0 ${selectedUserId === user.uid ? "opacity-100" : "opacity-0"}`} />
                               <span className="truncate min-w-0 flex-1">
-                                {user.name || "Unnamed User"} ({user.email})
+                                {formatUserDisplayName(user, { showEmail: true })}
                               </span>
                             </div>
                           ))}
                         {approvedUsers.filter(
                           (user) =>
                             user.name?.toLowerCase().includes(userSearchQuery.trim().toLowerCase()) ||
-                            user.email?.toLowerCase().includes(userSearchQuery.trim().toLowerCase())
+                            user.email?.toLowerCase().includes(userSearchQuery.trim().toLowerCase()) ||
+                            user.clientId?.toLowerCase().includes(userSearchQuery.trim().toLowerCase())
                         ).length === 0 && (
                           <div key="no-users" className="px-3 py-4 text-sm text-muted-foreground">
                             No users found.

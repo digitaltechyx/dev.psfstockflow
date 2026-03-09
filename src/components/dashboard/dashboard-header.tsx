@@ -64,7 +64,9 @@ export function DashboardHeader({ onProfileClick }: DashboardHeaderProps) {
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="hidden flex-col items-end sm:flex">
             <span className="text-sm font-medium">{userProfile?.name}</span>
-            <span className="text-xs text-muted-foreground">User</span>
+            <span className="text-xs text-muted-foreground">
+              User{userProfile?.clientId ? ` · #${userProfile.clientId}` : ""}
+            </span>
           </div>
 
           <DropdownMenu>
@@ -88,6 +90,11 @@ export function DashboardHeader({ onProfileClick }: DashboardHeaderProps) {
                   <p className="text-xs leading-none text-muted-foreground">
                     {userProfile?.email}
                   </p>
+                  {userProfile?.clientId && (
+                    <p className="text-xs leading-none text-muted-foreground pt-0.5">
+                      Client ID: <span className="font-medium text-foreground">#{userProfile.clientId}</span>
+                    </p>
+                  )}
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
