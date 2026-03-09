@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Shield, Zap, RotateCcw, MapPin, Users } from "lucide-react";
+import { Loader2, Shield, Zap, RotateCcw, MapPin, Users, UserCheck } from "lucide-react";
 import type { UserProfile, UserRole, UserFeature } from "@/types";
 import { getUserRoles, getDefaultFeaturesForRole } from "@/lib/permissions";
 import { generateUniqueReferralCode } from "@/lib/commission-utils";
@@ -114,12 +114,25 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
   const [managedLocationIds, setManagedLocationIds] = useState<string[]>(user.managedLocationIds ?? []);
   const [assignedUserIds, setAssignedUserIds] = useState<string[]>(user.assignedUserIds ?? []);
 
+  // Commission agent: users who are assigned as this agent's affiliates (referredByAgentId === user.uid)
+  const currentAffiliateIds = useMemo(
+    () => allUsersList.filter((u) => u.referredByAgentId === user.uid).map((u) => u.uid!),
+    [allUsersList, user.uid]
+  );
+  const [assignedAffiliateIds, setAssignedAffiliateIds] = useState<string[]>([]);
+  useEffect(() => {
+    setAssignedAffiliateIds(allUsersList.filter((u) => u.referredByAgentId === user.uid).map((u) => u.uid!));
+  }, [user.uid, allUsersList]);
+
   const handleRoleToggle = (role: UserRole) => {
     setSelectedRoles((prev) => {
       if (prev.includes(role)) {
         if (role === "sub_admin") {
           setManagedLocationIds([]);
           setAssignedUserIds([]);
+        }
+        if (role === "commission_agent") {
+          setAssignedAffiliateIds([]);
         }
         return prev.filter((r) => r !== role);
       } else {
@@ -190,6 +203,18 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
 
       await updateDoc(doc(db, "users", user.uid), updateData);
 
+      // Commission agent: update referredByAgentId on assigned/unassigned users
+      if (selectedRoles.includes("commission_agent")) {
+        const toAdd = assignedAffiliateIds.filter((id) => !currentAffiliateIds.includes(id));
+        const toRemove = currentAffiliateIds.filter((id) => !assignedAffiliateIds.includes(id));
+        for (const uid of toAdd) {
+          await updateDoc(doc(db, "users", uid), { referredByAgentId: user.uid });
+        }
+        for (const uid of toRemove) {
+          await updateDoc(doc(db, "users", uid), { referredByAgentId: null });
+        }
+      }
+
       const successMessage = isAddingCommissionAgentRole
         ? `Roles and features updated successfully. New referral code: ${updateData.referralCode}`
         : "Roles and features have been updated successfully.";
@@ -247,7 +272,10 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
     selectedRoles.includes("sub_admin") &&
     (JSON.stringify([...managedLocationIds].sort()) !== JSON.stringify([...(user.managedLocationIds ?? [])].sort()) ||
      JSON.stringify([...assignedUserIds].sort()) !== JSON.stringify([...(user.assignedUserIds ?? [])].sort()));
-  const hasChanges = hasRoleOrFeatureChanges || hasSubAdminScopeChanges;
+  const hasCommissionAgentScopeChanges =
+    selectedRoles.includes("commission_agent") &&
+    (JSON.stringify([...assignedAffiliateIds].sort()) !== JSON.stringify([...currentAffiliateIds].sort()));
+  const hasChanges = hasRoleOrFeatureChanges || hasSubAdminScopeChanges || hasCommissionAgentScopeChanges;
 
   return (
     <div className="space-y-6">
@@ -393,6 +421,57 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
                           }}
                         />
                         <label htmlFor={`assign-${u.uid}`} className="text-sm cursor-pointer">
+                          {u.name || u.email || u.uid}
+                          {(u.locations?.length ?? 0) > 0 && (
+                            <Badge variant="secondary" className="ml-2 text-xs">{(u.locations?.length ?? 0)} loc</Badge>
+                          )}
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Commission Agent: Assigned Affiliates (same UI pattern as sub admin assign users) */}
+      {selectedRoles.includes("commission_agent") && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-primary" />
+              <CardTitle>Commission Agent: Assigned Affiliates</CardTitle>
+            </div>
+            <CardDescription>
+              Assign existing users to this commission agent so they become his affiliates. These users will show under this agent&apos;s referrals and count toward commissions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div>
+                  <Label className="text-sm font-medium">Assigned users (affiliates)</Label>
+                  <p className="text-xs text-muted-foreground">Users selected here will have this agent set as their referring agent.</p>
+                </div>
+              </div>
+              <ScrollArea className="h-[180px] rounded-md border p-3">
+                <div className="space-y-2">
+                  {assignableUsersList.map((u) => {
+                    const isSelected = assignedAffiliateIds.includes(u.uid!);
+                    return (
+                      <div key={u.uid} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`affiliate-${u.uid}`}
+                          checked={isSelected}
+                          onCheckedChange={(checked) => {
+                            setAssignedAffiliateIds((prev) =>
+                              checked ? [...prev, u.uid!] : prev.filter((id) => id !== u.uid)
+                            );
+                          }}
+                        />
+                        <label htmlFor={`affiliate-${u.uid}`} className="text-sm cursor-pointer">
                           {u.name || u.email || u.uid}
                           {(u.locations?.length ?? 0) > 0 && (
                             <Badge variant="secondary" className="ml-2 text-xs">{(u.locations?.length ?? 0)} loc</Badge>

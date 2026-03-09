@@ -36,6 +36,13 @@ export default function AdminUsersPage() {
     }
   }, [tabFromUrl]);
 
+  // Sub admin sees only Users (clients), not Commission Agents tab — force "users" tab
+  useEffect(() => {
+    if (isSubAdmin && activeTab === "commission_agents") {
+      setActiveTab("users");
+    }
+  }, [isSubAdmin, activeTab]);
+
   const filteredUsers = useMemo(() => {
     return users
       .filter((user) => user.uid !== adminUser?.uid)
@@ -118,8 +125,12 @@ export default function AdminUsersPage() {
             )}
           </div>
 
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "commission_agents")} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
+          <Tabs
+            value={isSubAdmin ? "users" : activeTab}
+            onValueChange={(v) => !isSubAdmin && setActiveTab(v as "users" | "commission_agents")}
+            className="w-full"
+          >
+            <TabsList className={isSubAdmin ? "grid w-full grid-cols-1 mb-6" : "grid w-full grid-cols-2 mb-6"}>
               <TabsTrigger value="users" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
                 Users
@@ -129,17 +140,19 @@ export default function AdminUsersPage() {
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="commission_agents" className="flex items-center gap-2">
-                <UserCheck className="h-4 w-4" />
-                Commission Agents
-                {pendingCommissionAgentsCount > 0 && (
-                  <Badge variant="destructive" className="ml-2">
-                    {pendingCommissionAgentsCount}
-                  </Badge>
-                )}
-              </TabsTrigger>
+              {!isSubAdmin && (
+                <TabsTrigger value="commission_agents" className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4" />
+                  Commission Agents
+                  {pendingCommissionAgentsCount > 0 && (
+                    <Badge variant="destructive" className="ml-2">
+                      {pendingCommissionAgentsCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              )}
             </TabsList>
-            
+
             <TabsContent value="users" className="mt-0">
               {usersLoading ? (
                 <div className="space-y-4">
@@ -156,18 +169,20 @@ export default function AdminUsersPage() {
                 />
               )}
             </TabsContent>
-            
-            <TabsContent value="commission_agents" className="mt-0">
-              {usersLoading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-32 w-full rounded-xl" />
-                  ))}
-                </div>
-              ) : (
-                <CommissionAgentsManagement adminUser={adminUser} usersOverride={isSubAdmin ? users : undefined} />
-              )}
-            </TabsContent>
+
+            {!isSubAdmin && (
+              <TabsContent value="commission_agents" className="mt-0">
+                {usersLoading ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-32 w-full rounded-xl" />
+                    ))}
+                  </div>
+                ) : (
+                  <CommissionAgentsManagement adminUser={adminUser} />
+                )}
+              </TabsContent>
+            )}
           </Tabs>
         </CardContent>
       </Card>
