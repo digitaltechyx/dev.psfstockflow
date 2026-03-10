@@ -9,7 +9,7 @@ import { hasRole, getUserRoles } from "@/lib/permissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { ShieldCheck, Users, KeyRound, ListChecks, UserCog, MapPin, Loader2, AlertCircle } from "lucide-react";
+import { ShieldCheck, Users, KeyRound, ListChecks, UserCog, MapPin, Loader2, AlertCircle, Crown, User, HandCoins } from "lucide-react";
 import { ROLE_DEFINITIONS, CLIENT_FEATURES_CONFIG, ADMIN_FEATURES_CONFIG } from "@/lib/roles-permissions-config";
 import { RoleFeatureManagement } from "@/components/admin/role-feature-management";
 import { AssignLocationTab } from "@/components/admin/assign-location-tab";
@@ -90,111 +90,147 @@ export default function RolesPermissionsPage() {
     );
   }
 
+  const roleMeta: Record<string, { icon: React.ReactNode; accent: string }> = {
+    admin: { icon: <Crown className="h-5 w-5" />, accent: "from-violet-500/15 to-purple-600/10 border-violet-200 dark:border-violet-800/50" },
+    user: { icon: <User className="h-5 w-5" />, accent: "from-blue-500/15 to-cyan-500/10 border-blue-200 dark:border-blue-800/50" },
+    commission_agent: { icon: <HandCoins className="h-5 w-5" />, accent: "from-emerald-500/15 to-teal-500/10 border-emerald-200 dark:border-emerald-800/50" },
+    sub_admin: { icon: <UserCog className="h-5 w-5" />, accent: "from-amber-500/15 to-orange-500/10 border-amber-200 dark:border-amber-800/50" },
+  };
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-          <ShieldCheck className="h-7 w-7 text-primary" />
-          Roles & Permissions
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Full control over roles and feature access. Assign roles and granular permissions to users.
-        </p>
+    <div className="space-y-8">
+      <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-primary/5 via-background to-primary/5 px-6 py-8 shadow-sm">
+        <div className="relative flex flex-col gap-1">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary shadow-inner">
+              <ShieldCheck className="h-6 w-6" />
+            </span>
+            Roles & Permissions
+          </h1>
+          <p className="text-muted-foreground max-w-xl">
+            Full control over roles and feature access. Assign roles and granular permissions to users.
+          </p>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "overview" | "assign" | "locations")}>
-        <TabsList className="grid w-full max-w-2xl grid-cols-3">
-          <TabsTrigger value="overview" className="flex items-center gap-2">
+        <TabsList className="inline-flex h-12 w-full max-w-2xl rounded-xl border bg-muted/40 p-1 shadow-inner">
+          <TabsTrigger
+            value="overview"
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground"
+          >
             <ListChecks className="h-4 w-4" />
             Overview
           </TabsTrigger>
-          <TabsTrigger value="assign" className="flex items-center gap-2">
+          <TabsTrigger
+            value="assign"
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground"
+          >
             <UserCog className="h-4 w-4" />
             Assign to User
           </TabsTrigger>
-          <TabsTrigger value="locations" className="flex items-center gap-2">
+          <TabsTrigger
+            value="locations"
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground"
+          >
             <MapPin className="h-4 w-4" />
             Assign Location
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6 mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
+        <TabsContent value="overview" className="space-y-8 mt-8">
+          <Card className="overflow-hidden rounded-2xl border-2 shadow-sm">
+            <CardHeader className="border-b bg-muted/20 pb-6">
+              <CardTitle className="flex items-center gap-3 text-xl">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                  <Users className="h-5 w-5" />
+                </span>
                 Roles
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-base">
                 System roles. Users can have multiple roles and get access to all corresponding dashboards.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               {usersLoading ? (
-                <Skeleton className="h-32 w-full rounded-lg" />
+                <Skeleton className="h-40 w-full rounded-xl" />
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {ROLE_DEFINITIONS.map((role) => (
-                    <Card key={role.value} className="border bg-card">
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-base">{role.label}</CardTitle>
-                          <Badge variant="secondary">{roleCounts[role.value] ?? 0} users</Badge>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                  {ROLE_DEFINITIONS.map((role) => {
+                    const meta = roleMeta[role.value];
+                    const count = roleCounts[role.value] ?? 0;
+                    return (
+                      <div
+                        key={role.value}
+                        className={`group relative overflow-hidden rounded-xl border-2 bg-gradient-to-br ${meta?.accent ?? ""} p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background/80 text-foreground shadow-sm">
+                            {meta?.icon}
+                          </span>
+                          <Badge variant="secondary" className="shrink-0 font-semibold">
+                            {count} users
+                          </Badge>
                         </div>
-                        <CardDescription className="text-xs">{role.description}</CardDescription>
-                        <p className="text-xs text-muted-foreground mt-1">{role.dashboardAccess}</p>
-                      </CardHeader>
-                    </Card>
-                  ))}
+                        <h3 className="mt-3 font-semibold text-foreground">{role.label}</h3>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{role.description}</p>
+                        <p className="mt-2 text-xs text-muted-foreground/90">{role.dashboardAccess}</p>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <KeyRound className="h-5 w-5" />
+          <Card className="overflow-hidden rounded-2xl border-2 shadow-sm">
+            <CardHeader className="border-b bg-muted/20 pb-6">
+              <CardTitle className="flex items-center gap-3 text-xl">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                  <KeyRound className="h-5 w-5" />
+                </span>
                 Client Features
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-base">
                 Permissions for the client dashboard. Grant or revoke per user in Assign to User.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <CardContent className="pt-6">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {CLIENT_FEATURES_CONFIG.map((f) => (
                   <div
                     key={f.value}
-                    className="flex flex-col rounded-lg border bg-muted/30 p-3"
+                    className="flex flex-col rounded-xl border-2 border-border/60 bg-card p-4 shadow-sm transition-all duration-200 hover:border-primary/30 hover:shadow-md"
                   >
-                    <span className="font-medium text-sm">{f.label}</span>
-                    <span className="text-xs text-muted-foreground mt-0.5">{f.description}</span>
+                    <span className="font-semibold text-foreground">{f.label}</span>
+                    <span className="mt-1 text-sm text-muted-foreground leading-relaxed">{f.description}</span>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5" />
+          <Card className="overflow-hidden rounded-2xl border-2 shadow-sm">
+            <CardHeader className="border-b bg-muted/20 pb-6">
+              <CardTitle className="flex items-center gap-3 text-xl">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/15 text-violet-600 dark:text-violet-400">
+                  <ShieldCheck className="h-5 w-5" />
+                </span>
                 Admin Features
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-base">
                 Permissions for the admin panel. Sub admins only see modules for which they have the matching feature.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <CardContent className="pt-6">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {ADMIN_FEATURES_CONFIG.map((f) => (
                   <div
                     key={f.value}
-                    className="flex flex-col rounded-lg border bg-muted/30 p-3"
+                    className="flex flex-col rounded-xl border-2 border-border/60 bg-card p-4 shadow-sm transition-all duration-200 hover:border-primary/30 hover:shadow-md"
                   >
-                    <span className="font-medium text-sm">{f.label}</span>
-                    <span className="text-xs text-muted-foreground mt-0.5">{f.description}</span>
+                    <span className="font-semibold text-foreground">{f.label}</span>
+                    <span className="mt-1 text-sm text-muted-foreground leading-relaxed">{f.description}</span>
                   </div>
                 ))}
               </div>
@@ -202,19 +238,24 @@ export default function RolesPermissionsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="assign" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Assign roles and permissions</CardTitle>
-              <CardDescription>
+        <TabsContent value="assign" className="mt-8">
+          <Card className="overflow-hidden rounded-2xl border-2 shadow-sm">
+            <CardHeader className="border-b bg-muted/20 pb-6">
+              <CardTitle className="flex items-center gap-3 text-xl">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                  <UserCog className="h-5 w-5" />
+                </span>
+                Assign roles and permissions
+              </CardTitle>
+              <CardDescription className="text-base">
                 Select a user and update their roles and feature access. Changes take effect immediately.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 pt-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Select user</label>
                 <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                  <SelectTrigger className="w-full max-w-md">
+                  <SelectTrigger className="w-full max-w-md rounded-xl border-2 h-11">
                     <SelectValue placeholder="Choose a user..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -228,7 +269,7 @@ export default function RolesPermissionsPage() {
               </div>
 
               {selectedUser ? (
-                <div className="rounded-lg border bg-card p-4">
+                <div className="rounded-xl border-2 border-border/60 bg-card p-6 shadow-sm">
                   <RoleFeatureManagement
                     user={selectedUser}
                     onSuccess={() => {
@@ -237,7 +278,7 @@ export default function RolesPermissionsPage() {
                   />
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground py-8 text-center">
+                <p className="py-10 text-center text-sm text-muted-foreground">
                   Select a user above to manage their roles and permissions.
                 </p>
               )}
@@ -245,7 +286,7 @@ export default function RolesPermissionsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="locations" className="mt-6">
+        <TabsContent value="locations" className="mt-8">
           <AssignLocationTab />
         </TabsContent>
       </Tabs>
