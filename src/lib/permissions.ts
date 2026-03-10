@@ -2,19 +2,20 @@ import type { UserProfile, UserRole, UserFeature } from "@/types";
 import { getRequiredFeatureForPath } from "@/lib/dashboard-routes";
 
 /**
- * Default features for newly created client users (restricted set).
- * This is the ONLY default — there is no "legacy" grant of all features.
- * Admin can grant more via Roles & Permissions.
+ * Default features for client users after MSA activation (and for legacy users with features).
+ * Includes Dashboard and Documents. New users get no features until they accept MSA.
  */
 const DEFAULT_CLIENT_FEATURES_FOR_NEW_USERS: UserFeature[] = [
-  "view_inventory",      // Add Inventory
-  "create_shipment",    // Create Shipment
-  "shipped_orders",     // Shipped Orders
-  "my_pricing",         // Pricing
-  "view_invoices",     // Invoices
-  "restock_summary",   // Restock Summary
-  "modification_logs", // Modification Logs
-  "delete_logs",       // Deleted Logs access
+  "view_dashboard",     // Dashboard
+  "client_documents",   // Documents tab
+  "view_inventory",
+  "create_shipment",
+  "shipped_orders",
+  "my_pricing",
+  "view_invoices",
+  "restock_summary",
+  "modification_logs",
+  "delete_logs",
 ];
 
 export function getDefaultFeaturesForRole(role: UserRole): UserFeature[] {
@@ -99,25 +100,30 @@ export function hasAllRoles(userProfile: UserProfile | null | undefined, ...role
 }
 
 /**
+ * True if client (user role) has accepted MSA and account is activated.
+ * Both new and existing users must have accountActivatedAt set (i.e. complete the MSA flow).
+ */
+export function isAccountActivated(userProfile: UserProfile | null | undefined): boolean {
+  if (!userProfile) return false;
+  if (!hasRole(userProfile, "user")) return true; // non-clients not gated by MSA
+  return !!(userProfile.accountActivatedAt != null);
+}
+
+/**
  * Check if user has a specific feature.
- * For clients (role "user") with a non-empty features array, ONLY those features are granted.
+ * For clients (role "user"): must be activated (MSA accepted) or have explicit features; then grant from features array or default list.
  */
 export function hasFeature(userProfile: UserProfile | null | undefined, feature: UserFeature): boolean {
   if (!userProfile) return false;
 
-  // Admin always has all features
-  if (hasRole(userProfile, "admin")) {
-    return true;
-  }
+  if (hasRole(userProfile, "admin")) return true;
 
   const features = userProfile.features;
   const hasExplicitFeatures = Array.isArray(features) && features.length > 0;
 
-  // Client (role "user"): strict — only grant what is in their features array or the default 8 if no array
   if (hasRole(userProfile, "user")) {
-    if (hasExplicitFeatures) {
-      return features.includes(feature);
-    }
+    if (!isAccountActivated(userProfile)) return false;
+    if (hasExplicitFeatures) return features.includes(feature);
     return DEFAULT_CLIENT_FEATURES_FOR_NEW_USERS.includes(feature);
   }
 
@@ -146,6 +152,7 @@ export function hasAnyFeature(userProfile: UserProfile | null | undefined, ...re
   const hasExplicitFeatures = Array.isArray(userFeatures) && userFeatures.length > 0;
 
   if (hasRole(userProfile, "user")) {
+    if (!isAccountActivated(userProfile)) return false;
     if (hasExplicitFeatures) {
       return requestedFeatures.some((f) => userFeatures.includes(f));
     }

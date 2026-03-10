@@ -9,7 +9,7 @@ import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { ClientFeatureGate } from "@/components/dashboard/client-feature-gate";
 import { DashboardNavProvider } from "@/contexts/dashboard-nav-context";
-import { hasRole, getUserRoles } from "@/lib/permissions";
+import { hasRole, getUserRoles, isAccountActivated } from "@/lib/permissions";
 import {
   SidebarProvider,
   SidebarInset,
@@ -82,6 +82,12 @@ export default function DashboardLayout({
       } else if (userProfile.status === "pending") {
         // Redirect pending users to a waiting page
         router.replace("/pending-approval");
+      } else if (hasUserRole && !hasAgentRole && !isAccountActivated(userProfile)) {
+        // Client (user only) must accept MSA before accessing dashboard
+        const isOnActivatePage = pathname === "/dashboard/activate-account" || pathname?.startsWith("/dashboard/activate-account");
+        if (!isOnActivatePage) {
+          router.replace("/dashboard/activate-account");
+        }
       } else if (userProfile.status === "deleted") {
         // Sign out deleted users
         signOut();

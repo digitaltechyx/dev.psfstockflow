@@ -1,8 +1,10 @@
 "use client";
 
-import { LogOut, User as UserIcon } from "lucide-react";
+import { LogOut, User as UserIcon, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { hasRole, isAccountActivated } from "@/lib/permissions";
+import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -66,6 +68,12 @@ export function DashboardHeader({ onProfileClick }: DashboardHeaderProps) {
             <span className="text-sm font-medium">{userProfile?.name}</span>
             <span className="text-xs text-muted-foreground">
               User{userProfile?.clientId ? ` · #${userProfile.clientId}` : ""}
+              {hasRole(userProfile, "user") && isAccountActivated(userProfile) && (
+                <Badge variant="outline" className="ml-2 border-green-500/50 bg-green-50 text-green-700 text-[10px] px-1.5 py-0">
+                  <CheckCircle className="h-3 w-3 mr-0.5" />
+                  Active
+                </Badge>
+              )}
             </span>
           </div>
 

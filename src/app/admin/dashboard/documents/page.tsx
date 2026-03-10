@@ -10,8 +10,10 @@ import { useManagedUsers } from "@/hooks/use-managed-users";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
-import { FileText, Upload, Loader2, CheckCircle, Clock, Download, User, Search, FileStack, CalendarCheck } from "lucide-react";
+import { FileText, Upload, Loader2, CheckCircle, Clock, Download, User, Search, FileStack, CalendarCheck, FileSignature } from "lucide-react";
 import { format, subDays } from "date-fns";
+import { generateMSAPDF } from "@/lib/msa-pdf-generator";
+import type { UserProfile } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -57,6 +59,7 @@ export default function DocumentRequestsPage() {
   const [selectedRequest, setSelectedRequest] = useState<DocumentRequest | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [msaDownloadingUid, setMsaDownloadingUid] = useState<string | null>(null);
 
   // Get all document requests using collectionGroup
   const { data: allRequests, loading } = useCollectionGroup<DocumentRequest>(
@@ -281,6 +284,41 @@ export default function DocumentRequestsPage() {
     document.body.removeChild(link);
   };
 
+  const usersWithMSA = useMemo(
+    () => users.filter((u: UserProfile) => u.msaClientDetails && u.msaEffectiveDate),
+    [users]
+  );
+
+  const handleDownloadMSA = async (user: UserProfile) => {
+    if (!user.msaClientDetails || !user.msaEffectiveDate) return;
+    setMsaDownloadingUid(user.uid);
+    try {
+      const acceptedAt = user.accountActivatedAt && typeof user.accountActivatedAt === "object" && "seconds" in user.accountActivatedAt
+        ? format(new Date((user.accountActivatedAt as { seconds: number }).seconds * 1000), "MMMM d, yyyy")
+        : undefined;
+      const blob = await generateMSAPDF({
+        effectiveDate: user.msaEffectiveDate,
+        clientDetails: user.msaClientDetails,
+        acceptedAt,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `MSA-${user.msaClientDetails.companyName.replace(/\s+/g, "-")}-${user.msaEffectiveDate}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Download started", description: "MSA PDF has been downloaded." });
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: e instanceof Error ? e.message : "Failed to generate MSA PDF.",
+      });
+    } finally {
+      setMsaDownloadingUid(null);
+    }
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div>
@@ -289,6 +327,53 @@ export default function DocumentRequestsPage() {
           Review and manage document requests from users
         </p>
       </div>
+
+      {/* Signed MSAs */}
+      {usersWithMSA.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileSignature className="h-5 w-5 text-indigo-500" />
+              Signed Master Service Agreements
+            </CardTitle>
+            <CardDescription>
+              Clients who have accepted the MSA. Download a copy for any client.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {usersWithMSA.map((u: UserProfile) => (
+                <div
+                  key={u.uid}
+                  className="flex items-center justify-between rounded-lg border bg-muted/30 p-3"
+                >
+                  <div>
+                    <p className="font-medium">{u.name ?? u.email}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {u.msaClientDetails!.companyName} · Effective {u.msaEffectiveDate}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownloadMSA(u)}
+                    disabled={msaDownloadingUid === u.uid}
+                  >
+                    {msaDownloadingUid === u.uid ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Download className="mr-2 h-4 w-4" />
+                        Download MSA
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stat cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

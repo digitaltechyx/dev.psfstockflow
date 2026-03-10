@@ -111,9 +111,6 @@ export default function RegisterPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
 
-      // Import default features helper
-      const { getDefaultFeaturesForRole } = await import("@/lib/permissions");
-      
       const userData: any = {
         uid: user.uid,
         name: values.fullName,
@@ -128,8 +125,8 @@ export default function RegisterPage() {
         country: values.country,
         zipCode: values.zipCode,
         role: "user",
-        roles: ["user"], // Set roles array
-        features: getDefaultFeaturesForRole("user"), // Give all features by default
+        roles: ["user"],
+        features: [], // No features until user accepts MSA (Activate Account)
         status: "pending",
         storageType: values.storageType, // Store selected storage type
         createdAt: new Date(),

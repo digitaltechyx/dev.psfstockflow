@@ -77,6 +77,18 @@ export interface UserProfile {
   managedLocationIds?: string[];
   /** Sub admin only: user UIDs explicitly assigned to this sub admin (they can manage these users). */
   assignedUserIds?: string[];
+  /** Client (user role): set when user accepts MSA; unlocks default features. */
+  accountActivatedAt?: { seconds: number; nanoseconds: number } | Date | null;
+  /** Snapshot of client details at MSA acceptance (for agreement document). */
+  msaClientDetails?: {
+    legalName: string;
+    companyName: string;
+    address: string;
+    email: string;
+    phone: string;
+  } | null;
+  /** MSA effective date (ISO string). */
+  msaEffectiveDate?: string | null;
 }
 
 export interface InventoryItem {

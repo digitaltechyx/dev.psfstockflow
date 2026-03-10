@@ -8,9 +8,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCollection } from "@/hooks/use-collection";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { FileText, Download, Upload, Loader2, CheckCircle, Clock } from "lucide-react";
+import { FileText, Download, Upload, Loader2, CheckCircle, Clock, FileSignature } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { generateMSAPDF } from "@/lib/msa-pdf-generator";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,7 @@ export default function DocumentsPage() {
   const [contact, setContact] = useState("");
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [msaDownloading, setMsaDownloading] = useState(false);
 
   const { data: documentRequests, loading } = useCollection<DocumentRequest>(
     userProfile ? `users/${userProfile.uid}/documentRequests` : ""
@@ -153,6 +155,36 @@ export default function DocumentsPage() {
     document.body.removeChild(link);
   };
 
+  const handleDownloadMSA = async () => {
+    if (!userProfile?.msaClientDetails || !userProfile?.msaEffectiveDate) return;
+    setMsaDownloading(true);
+    try {
+      const acceptedAt = userProfile.accountActivatedAt && "seconds" in userProfile.accountActivatedAt
+        ? format(new Date(userProfile.accountActivatedAt.seconds * 1000), "MMMM d, yyyy")
+        : undefined;
+      const blob = await generateMSAPDF({
+        effectiveDate: userProfile.msaEffectiveDate,
+        clientDetails: userProfile.msaClientDetails,
+        acceptedAt,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `MSA-${userProfile.msaClientDetails.companyName.replace(/\s+/g, "-")}-${userProfile.msaEffectiveDate}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Download started", description: "Your MSA has been downloaded." });
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: e instanceof Error ? e.message : "Failed to generate MSA PDF.",
+      });
+    } finally {
+      setMsaDownloading(false);
+    }
+  };
+
   const pendingRequests = documentRequests.filter((req) => req.status === "pending");
   const completedRequests = documentRequests.filter((req) => req.status === "complete");
 
@@ -252,6 +284,41 @@ export default function DocumentsPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Master Service Agreement (signed) */}
+      {userProfile?.msaClientDetails && userProfile?.msaEffectiveDate && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileSignature className="h-5 w-5 text-indigo-500" />
+              Master Service Agreement
+            </CardTitle>
+            <CardDescription>
+              Your accepted agreement (effective {userProfile.msaEffectiveDate}). You can download a copy below.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-4">
+              <div>
+                <p className="font-medium">{userProfile.msaClientDetails.companyName}</p>
+                <p className="text-sm text-muted-foreground">
+                  Accepted by {userProfile.msaClientDetails.legalName} · Effective {userProfile.msaEffectiveDate}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleDownloadMSA} disabled={msaDownloading}>
+                {msaDownloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download PDF
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Pending Requests */}
       {pendingRequests.length > 0 && (
