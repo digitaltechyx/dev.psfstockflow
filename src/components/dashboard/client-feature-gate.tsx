@@ -9,15 +9,27 @@ import { Lock } from "lucide-react";
 
 function LockedOverlay() {
   return (
-    <div className="flex min-h-[60vh] w-full flex-col items-center justify-center gap-4 rounded-lg border border-border/50 bg-muted/30 p-8 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-        <Lock className="h-8 w-8 text-muted-foreground" />
-      </div>
-      <div className="space-y-1">
-        <p className="text-lg font-semibold">Unlock</p>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          Contact with the admin to unlock this feature for your account.
-        </p>
+    <div className="relative flex min-h-[60vh] w-full flex-col items-center justify-center overflow-hidden rounded-xl p-6">
+      {/* Soft gradient/mesh background so blur has something to work with */}
+      <div
+        className="absolute inset-0 rounded-xl"
+        aria-hidden
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 60% at 50% 40%, rgba(120, 119, 198, 0.12), transparent), radial-gradient(ellipse 60% 80% at 80% 20%, rgba(99, 102, 241, 0.08), transparent), radial-gradient(ellipse 50% 50% at 20% 80%, rgba(139, 92, 246, 0.06), transparent)",
+        }}
+      />
+      {/* Glass card */}
+      <div className="relative flex flex-col items-center justify-center gap-5 rounded-2xl border border-white/20 bg-white/70 px-10 py-10 text-center shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-white/10 dark:shadow-none">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/30 bg-white/50 shadow-inner backdrop-blur-sm dark:bg-white/5">
+          <Lock className="h-9 w-9 text-muted-foreground" />
+        </div>
+        <div className="space-y-2">
+          <p className="text-xl font-semibold tracking-tight text-foreground">Unlock</p>
+          <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+            Contact with the admin to unlock this feature for your account.
+          </p>
+        </div>
       </div>
     </div>
   );
