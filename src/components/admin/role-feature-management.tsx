@@ -21,7 +21,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Shield, Zap, RotateCcw, MapPin, Users, UserCheck } from "lucide-react";
+import { Loader2, Shield, Zap, RotateCcw, MapPin, Users, UserCheck, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import type { UserProfile, UserRole, UserFeature } from "@/types";
 import { getUserRoles, getDefaultFeaturesForRole } from "@/lib/permissions";
 import { generateUniqueReferralCode } from "@/lib/commission-utils";
@@ -97,6 +98,34 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
     [allUsersList, user.uid]
   );
 
+  const filteredManagedLocations = useMemo(() => {
+    const q = locationSearch.trim().toLowerCase();
+    if (!q) return activeLocations;
+    return activeLocations.filter((loc) => (loc.name ?? "").toLowerCase().includes(q));
+  }, [activeLocations, locationSearch]);
+
+  const filteredAssignableUsers = useMemo(() => {
+    const q = assignedUserSearch.trim().toLowerCase();
+    if (!q) return assignableUsersList;
+    return assignableUsersList.filter(
+      (u) =>
+        (u.name ?? "").toLowerCase().includes(q) ||
+        (u.email ?? "").toLowerCase().includes(q) ||
+        (u.uid ?? "").toLowerCase().includes(q)
+    );
+  }, [assignableUsersList, assignedUserSearch]);
+
+  const filteredAffiliateUsers = useMemo(() => {
+    const q = affiliateSearch.trim().toLowerCase();
+    if (!q) return assignableUsersList;
+    return assignableUsersList.filter(
+      (u) =>
+        (u.name ?? "").toLowerCase().includes(q) ||
+        (u.email ?? "").toLowerCase().includes(q) ||
+        (u.uid ?? "").toLowerCase().includes(q)
+    );
+  }, [assignableUsersList, affiliateSearch]);
+
   // Get current roles (support both legacy and new format)
   const currentRoles = getUserRoles(user);
   const [selectedRoles, setSelectedRoles] = useState<UserRole[]>(currentRoles);
@@ -114,6 +143,9 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
 
   const [managedLocationIds, setManagedLocationIds] = useState<string[]>(user.managedLocationIds ?? []);
   const [assignedUserIds, setAssignedUserIds] = useState<string[]>(user.assignedUserIds ?? []);
+  const [locationSearch, setLocationSearch] = useState("");
+  const [assignedUserSearch, setAssignedUserSearch] = useState("");
+  const [affiliateSearch, setAffiliateSearch] = useState("");
 
   // Commission agent: users who are assigned as this agent's affiliates (referredByAgentId === user.uid)
   const currentAffiliateIds = useMemo(
@@ -358,8 +390,19 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
             <div>
               <Label className="text-sm font-medium">Managed locations</Label>
               <p className="text-xs text-muted-foreground mb-2">Sub admin can manage users who have any of these locations.</p>
+              {activeLocations.length > 3 && (
+                <div className="relative mb-2">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search locations..."
+                    value={locationSearch}
+                    onChange={(e) => setLocationSearch(e.target.value)}
+                    className="pl-8 h-9"
+                  />
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
-                {activeLocations.map((loc) => {
+                {filteredManagedLocations.map((loc) => {
                   const isSelected = managedLocationIds.includes(loc.id);
                   return (
                     <div key={loc.id} className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
@@ -378,6 +421,9 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
                 })}
                 {activeLocations.length === 0 && (
                   <p className="text-sm text-muted-foreground">No locations. Add them in the Assign Location tab.</p>
+                )}
+                {activeLocations.length > 0 && filteredManagedLocations.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No locations match your search.</p>
                 )}
               </div>
             </div>
@@ -406,32 +452,45 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
                   </Button>
                 )}
               </div>
-              <ScrollArea className="h-[180px] rounded-md border p-3">
-                <div className="space-y-2">
-                  {assignableUsersList.map((u) => {
-                    const isSelected = assignedUserIds.includes(u.uid!);
-                    return (
-                      <div key={u.uid} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`assign-${u.uid}`}
-                          checked={isSelected}
-                          onCheckedChange={(checked) => {
-                            setAssignedUserIds((prev) =>
-                              checked ? [...prev, u.uid!] : prev.filter((id) => id !== u.uid)
-                            );
-                          }}
-                        />
-                        <label htmlFor={`assign-${u.uid}`} className="text-sm cursor-pointer">
-                          {formatUserDisplayName(u, { showEmail: false })}
-                          {(u.locations?.length ?? 0) > 0 && (
-                            <Badge variant="secondary" className="ml-2 text-xs">{(u.locations?.length ?? 0)} loc</Badge>
-                          )}
-                        </label>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
+              <div className="relative rounded-md border overflow-hidden">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                <Input
+                  placeholder="Search users..."
+                  value={assignedUserSearch}
+                  onChange={(e) => setAssignedUserSearch(e.target.value)}
+                  className="h-9 rounded-b-none border-0 border-b pl-8 focus-visible:ring-0"
+                />
+                <ScrollArea className="h-[160px] p-3">
+                  <div className="space-y-2">
+                    {filteredAssignableUsers.length === 0 ? (
+                      <p className="py-4 text-center text-sm text-muted-foreground">No users match your search.</p>
+                    ) : (
+                      filteredAssignableUsers.map((u) => {
+                        const isSelected = assignedUserIds.includes(u.uid!);
+                        return (
+                          <div key={u.uid} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`assign-${u.uid}`}
+                              checked={isSelected}
+                              onCheckedChange={(checked) => {
+                                setAssignedUserIds((prev) =>
+                                  checked ? [...prev, u.uid!] : prev.filter((id) => id !== u.uid)
+                                );
+                              }}
+                            />
+                            <label htmlFor={`assign-${u.uid}`} className="text-sm cursor-pointer">
+                              {formatUserDisplayName(u, { showEmail: false })}
+                              {(u.locations?.length ?? 0) > 0 && (
+                                <Badge variant="secondary" className="ml-2 text-xs">{(u.locations?.length ?? 0)} loc</Badge>
+                              )}
+                            </label>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -457,32 +516,45 @@ export function RoleFeatureManagement({ user, onSuccess }: RoleFeatureManagement
                   <p className="text-xs text-muted-foreground">Users selected here will have this agent set as their referring agent.</p>
                 </div>
               </div>
-              <ScrollArea className="h-[180px] rounded-md border p-3">
-                <div className="space-y-2">
-                  {assignableUsersList.map((u) => {
-                    const isSelected = assignedAffiliateIds.includes(u.uid!);
-                    return (
-                      <div key={u.uid} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`affiliate-${u.uid}`}
-                          checked={isSelected}
-                          onCheckedChange={(checked) => {
-                            setAssignedAffiliateIds((prev) =>
-                              checked ? [...prev, u.uid!] : prev.filter((id) => id !== u.uid)
-                            );
-                          }}
-                        />
-                        <label htmlFor={`affiliate-${u.uid}`} className="text-sm cursor-pointer">
-                          {formatUserDisplayName(u, { showEmail: false })}
-                          {(u.locations?.length ?? 0) > 0 && (
-                            <Badge variant="secondary" className="ml-2 text-xs">{(u.locations?.length ?? 0)} loc</Badge>
-                          )}
-                        </label>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
+              <div className="relative rounded-md border overflow-hidden">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                <Input
+                  placeholder="Search users..."
+                  value={affiliateSearch}
+                  onChange={(e) => setAffiliateSearch(e.target.value)}
+                  className="h-9 rounded-b-none border-0 border-b pl-8 focus-visible:ring-0"
+                />
+                <ScrollArea className="h-[160px] p-3">
+                  <div className="space-y-2">
+                    {filteredAffiliateUsers.length === 0 ? (
+                      <p className="py-4 text-center text-sm text-muted-foreground">No users match your search.</p>
+                    ) : (
+                      filteredAffiliateUsers.map((u) => {
+                        const isSelected = assignedAffiliateIds.includes(u.uid!);
+                        return (
+                          <div key={u.uid} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`affiliate-${u.uid}`}
+                              checked={isSelected}
+                              onCheckedChange={(checked) => {
+                                setAssignedAffiliateIds((prev) =>
+                                  checked ? [...prev, u.uid!] : prev.filter((id) => id !== u.uid)
+                                );
+                              }}
+                            />
+                            <label htmlFor={`affiliate-${u.uid}`} className="text-sm cursor-pointer">
+                              {formatUserDisplayName(u, { showEmail: false })}
+                              {(u.locations?.length ?? 0) > 0 && (
+                                <Badge variant="secondary" className="ml-2 text-xs">{(u.locations?.length ?? 0)} loc</Badge>
+                              )}
+                            </label>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
             </div>
           </CardContent>
         </Card>

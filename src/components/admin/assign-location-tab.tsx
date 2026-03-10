@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Plus, Trash2, Loader2 } from "lucide-react";
+import { MapPin, Plus, Trash2, Loader2, Search } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +41,8 @@ export function AssignLocationTab() {
   const [assigning, setAssigning] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [selectedLocationIds, setSelectedLocationIds] = useState<Set<string>>(new Set());
+  const [userSearch, setUserSearch] = useState("");
+  const [locationSearch, setLocationSearch] = useState("");
 
   const activeLocations = useMemo(
     () =>
@@ -57,6 +59,23 @@ export function AssignLocationTab() {
         .sort((a, b) => (a.name || a.email || "").localeCompare(b.name || b.email || "")),
     [users]
   );
+
+  const filteredAssignableUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return assignableUsers;
+    return assignableUsers.filter(
+      (u) =>
+        (u.name ?? "").toLowerCase().includes(q) ||
+        (u.email ?? "").toLowerCase().includes(q) ||
+        (u.uid ?? "").toLowerCase().includes(q)
+    );
+  }, [assignableUsers, userSearch]);
+
+  const filteredLocations = useMemo(() => {
+    const q = locationSearch.trim().toLowerCase();
+    if (!q) return activeLocations;
+    return activeLocations.filter((loc) => (loc.name ?? "").toLowerCase().includes(q));
+  }, [activeLocations, locationSearch]);
 
   const handleAddLocation = async () => {
     const name = newLocationName.trim();
@@ -223,49 +242,75 @@ export function AssignLocationTab() {
               <div className="grid gap-6 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">Users</Label>
-                  <ScrollArea className="h-[220px] rounded-xl border-2 border-border/60 bg-muted/5 p-4">
-                    <div className="space-y-3">
-                      {assignableUsers.map((u) => (
-                        <div key={u.uid} className="flex items-center space-x-3 rounded-lg py-1.5">
-                          <Checkbox
-                            id={`user-${u.uid}`}
-                            checked={selectedUserIds.has(u.uid!)}
-                            onCheckedChange={() => toggleUser(u.uid!)}
-                          />
-                          <label
-                            htmlFor={`user-${u.uid}`}
-                            className="cursor-pointer text-sm font-medium"
-                          >
-                            {formatUserDisplayName(u, { showEmail: false })}
-                            {(u.locations?.length ?? 0) > 0 && (
-                              <Badge variant="secondary" className="ml-2 font-medium">
-                                {(u.locations?.length ?? 0)} loc
-                              </Badge>
-                            )}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                  <div className="relative rounded-xl border-2 border-border/60 bg-muted/5 overflow-hidden">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      placeholder="Search users..."
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      className="h-10 rounded-t-xl rounded-b-none border-0 border-b bg-transparent pl-9 pr-3 focus-visible:ring-0"
+                    />
+                    <ScrollArea className="h-[180px] p-3">
+                      <div className="space-y-3">
+                        {filteredAssignableUsers.length === 0 ? (
+                          <p className="py-4 text-center text-sm text-muted-foreground">No users match your search.</p>
+                        ) : (
+                          filteredAssignableUsers.map((u) => (
+                            <div key={u.uid} className="flex items-center space-x-3 rounded-lg py-1.5">
+                              <Checkbox
+                                id={`user-${u.uid}`}
+                                checked={selectedUserIds.has(u.uid!)}
+                                onCheckedChange={() => toggleUser(u.uid!)}
+                              />
+                              <label
+                                htmlFor={`user-${u.uid}`}
+                                className="cursor-pointer text-sm font-medium"
+                              >
+                                {formatUserDisplayName(u, { showEmail: false })}
+                                {(u.locations?.length ?? 0) > 0 && (
+                                  <Badge variant="secondary" className="ml-2 font-medium">
+                                    {(u.locations?.length ?? 0)} loc
+                                  </Badge>
+                                )}
+                              </label>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">Locations to assign</Label>
-                  <ScrollArea className="h-[220px] rounded-xl border-2 border-border/60 bg-muted/5 p-4">
-                    <div className="space-y-3">
-                      {activeLocations.map((loc) => (
-                        <div key={loc.id} className="flex items-center space-x-3 rounded-lg py-1.5">
-                          <Checkbox
-                            id={`loc-${loc.id}`}
-                            checked={selectedLocationIds.has(loc.id)}
-                            onCheckedChange={() => toggleLocation(loc.id)}
-                          />
-                          <label htmlFor={`loc-${loc.id}`} className="cursor-pointer text-sm font-medium">
-                            {loc.name}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                  <div className="relative rounded-xl border-2 border-border/60 bg-muted/5 overflow-hidden">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      placeholder="Search locations..."
+                      value={locationSearch}
+                      onChange={(e) => setLocationSearch(e.target.value)}
+                      className="h-10 rounded-t-xl rounded-b-none border-0 border-b bg-transparent pl-9 pr-3 focus-visible:ring-0"
+                    />
+                    <ScrollArea className="h-[180px] p-3">
+                      <div className="space-y-3">
+                        {filteredLocations.length === 0 ? (
+                          <p className="py-4 text-center text-sm text-muted-foreground">No locations match your search.</p>
+                        ) : (
+                          filteredLocations.map((loc) => (
+                            <div key={loc.id} className="flex items-center space-x-3 rounded-lg py-1.5">
+                              <Checkbox
+                                id={`loc-${loc.id}`}
+                                checked={selectedLocationIds.has(loc.id)}
+                                onCheckedChange={() => toggleLocation(loc.id)}
+                              />
+                              <label htmlFor={`loc-${loc.id}`} className="cursor-pointer text-sm font-medium">
+                                {loc.name}
+                              </label>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
                 </div>
               </div>
               <Button

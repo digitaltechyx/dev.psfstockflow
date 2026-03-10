@@ -13,21 +13,26 @@ import { ShieldCheck, Users, KeyRound, ListChecks, UserCog, MapPin, Loader2, Ale
 import { ROLE_DEFINITIONS, CLIENT_FEATURES_CONFIG, ADMIN_FEATURES_CONFIG } from "@/lib/roles-permissions-config";
 import { RoleFeatureManagement } from "@/components/admin/role-feature-management";
 import { AssignLocationTab } from "@/components/admin/assign-location-tab";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatUserDisplayName } from "@/lib/format-user-display";
+import { ChevronDown } from "lucide-react";
 
 export default function RolesPermissionsPage() {
   const router = useRouter();
   const { userProfile: adminUser } = useAuth();
   const { data: users, loading: usersLoading } = useCollection<UserProfile>("users");
   const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [userSelectOpen, setUserSelectOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "assign" | "locations">("overview");
 
   const isSuperAdmin = adminUser && hasRole(adminUser, "admin");
@@ -254,18 +259,44 @@ export default function RolesPermissionsPage() {
             <CardContent className="space-y-6 pt-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Select user</label>
-                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                  <SelectTrigger className="w-full max-w-md rounded-xl border-2 h-11">
-                    <SelectValue placeholder="Choose a user..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortedUsersForSelect.map((u) => (
-                      <SelectItem key={u.uid} value={u.uid}>
-                        {formatUserDisplayName(u, { showEmail: true })}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={userSelectOpen} onOpenChange={setUserSelectOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={userSelectOpen}
+                      className="w-full max-w-md justify-between rounded-xl border-2 h-11 font-normal"
+                    >
+                      {selectedUser
+                        ? formatUserDisplayName(selectedUser, { showEmail: true })
+                        : "Choose a user..."}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-md p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search users by name or email..." className="h-10" />
+                      <CommandList>
+                        <CommandEmpty>No user found.</CommandEmpty>
+                        <CommandGroup>
+                          {sortedUsersForSelect.map((u) => (
+                            <CommandItem
+                              key={u.uid}
+                              value={`${u.name ?? ""} ${u.email ?? ""} ${u.uid ?? ""}`}
+                              onSelect={() => {
+                                setSelectedUserId(u.uid ?? "");
+                                setUserSelectOpen(false);
+                              }}
+                              className="cursor-pointer"
+                            >
+                              {formatUserDisplayName(u, { showEmail: true })}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {selectedUser ? (
