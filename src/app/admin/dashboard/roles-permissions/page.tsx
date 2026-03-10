@@ -14,18 +14,11 @@ import { ROLE_DEFINITIONS, CLIENT_FEATURES_CONFIG, ADMIN_FEATURES_CONFIG } from 
 import { RoleFeatureManagement } from "@/components/admin/role-feature-management";
 import { AssignLocationTab } from "@/components/admin/assign-location-tab";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatUserDisplayName } from "@/lib/format-user-display";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -41,8 +34,10 @@ export default function RolesPermissionsPage() {
   const { data: users, loading: usersLoading } = useCollection<UserProfile>("users");
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [userSelectOpen, setUserSelectOpen] = useState(false);
+  const [userSelectSearch, setUserSelectSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "assign" | "locations">("overview");
   const [selectedRoleForDialog, setSelectedRoleForDialog] = useState<UserRole | null>(null);
+  const [dialogUserSearch, setDialogUserSearch] = useState("");
 
   const isSuperAdmin = adminUser && hasRole(adminUser, "admin");
 
@@ -82,6 +77,17 @@ export default function RolesPermissionsPage() {
     [nonAdminUsers]
   );
 
+  const filteredUsersForSelect = useMemo(() => {
+    const q = userSelectSearch.trim().toLowerCase();
+    if (!q) return sortedUsersForSelect;
+    return sortedUsersForSelect.filter(
+      (u) =>
+        (u.name ?? "").toLowerCase().includes(q) ||
+        (u.email ?? "").toLowerCase().includes(q) ||
+        (u.uid ?? "").toLowerCase().includes(q)
+    );
+  }, [sortedUsersForSelect, userSelectSearch]);
+
   const selectedUser = useMemo(
     () => nonAdminUsers.find((u) => u.uid === selectedUserId),
     [nonAdminUsers, selectedUserId]
@@ -100,6 +106,21 @@ export default function RolesPermissionsPage() {
       Object.fromEntries(ROLE_DEFINITIONS.map((r) => [r.value, r.label])) as Record<UserRole, string>,
     []
   );
+
+  const filteredDialogUsers = useMemo(() => {
+    const q = dialogUserSearch.trim().toLowerCase();
+    if (!q) return usersWithSelectedRole;
+    return usersWithSelectedRole.filter(
+      (u) =>
+        (u.name ?? "").toLowerCase().includes(q) ||
+        (u.email ?? "").toLowerCase().includes(q) ||
+        (u.uid ?? "").toLowerCase().includes(q)
+    );
+  }, [usersWithSelectedRole, dialogUserSearch]);
+
+  useEffect(() => {
+    setDialogUserSearch("");
+  }, [selectedRoleForDialog]);
 
   if (!adminUser) {
     return (
@@ -284,7 +305,13 @@ export default function RolesPermissionsPage() {
             <CardContent className="space-y-6 pt-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Select user</label>
-                <Popover open={userSelectOpen} onOpenChange={setUserSelectOpen}>
+                <Popover
+                  open={userSelectOpen}
+                  onOpenChange={(open) => {
+                    setUserSelectOpen(open);
+                    if (!open) setUserSelectSearch("");
+                  }}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -301,40 +328,45 @@ export default function RolesPermissionsPage() {
                   <PopoverContent
                     className="w-[var(--radix-popover-trigger-width)] max-w-md p-0"
                     align="start"
-                    onCloseAutoFocus={(e) => e.preventDefault()}
+                    onOpenAutoFocus={(e) => e.preventDefault()}
                   >
-                    <Command shouldFilter={true}>
-                      <CommandInput placeholder="Search users by name or email..." className="h-10" />
-                      <CommandList>
-                        <CommandEmpty>No user found.</CommandEmpty>
-                        <CommandGroup>
-                          {sortedUsersForSelect.map((u) => {
-                            const displayName = formatUserDisplayName(u, { showEmail: true });
-                            const searchValue = [u.name, u.email, u.uid].filter(Boolean).join(" ");
-                            return (
-                              <CommandItem
-                                key={u.uid}
-                                value={searchValue}
-                                onSelect={() => {
-                                  setSelectedUserId(u.uid ?? "");
-                                  setUserSelectOpen(false);
-                                }}
-                                onPointerDown={(e) => e.preventDefault()}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setSelectedUserId(u.uid ?? "");
-                                  setUserSelectOpen(false);
-                                }}
-                                className="cursor-pointer"
-                              >
-                                {displayName}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
+                    <div className="p-2 border-b">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                          placeholder="Search users by name or email..."
+                          value={userSelectSearch}
+                          onChange={(e) => setUserSelectSearch(e.target.value)}
+                          className="pl-8 h-10 rounded-lg"
+                          autoComplete="off"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        {filteredUsersForSelect.length} user{filteredUsersForSelect.length !== 1 ? "s" : ""}
+                        {userSelectSearch.trim() ? " match search" : ""}
+                      </p>
+                    </div>
+                    <ScrollArea className="h-[280px]">
+                      <div className="p-1">
+                        {filteredUsersForSelect.length === 0 ? (
+                          <p className="py-6 text-center text-sm text-muted-foreground">No user found.</p>
+                        ) : (
+                          filteredUsersForSelect.map((u) => (
+                            <button
+                              key={u.uid}
+                              type="button"
+                              className="w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none"
+                              onClick={() => {
+                                setSelectedUserId(u.uid ?? "");
+                                setUserSelectOpen(false);
+                              }}
+                            >
+                              {formatUserDisplayName(u, { showEmail: true })}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
                   </PopoverContent>
                 </Popover>
               </div>
@@ -363,8 +395,8 @@ export default function RolesPermissionsPage() {
       </Tabs>
 
       <Dialog open={selectedRoleForDialog !== null} onOpenChange={(open) => !open && setSelectedRoleForDialog(null)}>
-        <DialogContent className="max-w-md sm:max-w-lg max-h-[85vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-md sm:max-w-lg max-h-[90vh] flex flex-col gap-4 p-0">
+          <DialogHeader className="px-6 pt-6 pb-0">
             <DialogTitle>
               {selectedRoleForDialog ? roleLabelByValue[selectedRoleForDialog] : ""} — Users
             </DialogTitle>
@@ -373,28 +405,48 @@ export default function RolesPermissionsPage() {
               Each user shows all of their role tags.
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="flex-1 min-h-0 -mx-2 px-2">
-            <ul className="space-y-2 pb-4">
-              {usersWithSelectedRole.map((u) => {
-                const roles = getUserRoles(u);
-                return (
-                  <li
-                    key={u.uid}
-                    className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-muted/20 p-3"
-                  >
-                    <span className="font-medium text-foreground">
-                      {formatUserDisplayName(u, { showEmail: true })}
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {roles.map((r) => (
-                        <Badge key={r} variant="secondary" className="text-xs font-medium">
-                          {roleLabelByValue[r]}
-                        </Badge>
-                      ))}
-                    </div>
-                  </li>
-                );
-              })}
+          <div className="px-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Search by name or email..."
+                value={dialogUserSearch}
+                onChange={(e) => setDialogUserSearch(e.target.value)}
+                className="pl-9 h-10 rounded-xl border-2"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              {filteredDialogUsers.length} of {usersWithSelectedRole.length} shown
+            </p>
+          </div>
+          <ScrollArea className="h-[50vh] min-h-[240px] max-h-[420px] px-6 pb-6">
+            <ul className="space-y-2 pr-4 pb-4">
+              {filteredDialogUsers.length === 0 ? (
+                <li className="py-8 text-center text-sm text-muted-foreground">
+                  No users match your search.
+                </li>
+              ) : (
+                filteredDialogUsers.map((u) => {
+                  const roles = getUserRoles(u);
+                  return (
+                    <li
+                      key={u.uid}
+                      className="flex flex-col gap-1.5 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 hover:bg-muted/30 transition-colors"
+                    >
+                      <span className="font-medium text-foreground text-sm">
+                        {formatUserDisplayName(u, { showEmail: true })}
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {roles.map((r) => (
+                          <Badge key={r} variant="secondary" className="text-xs font-medium">
+                            {roleLabelByValue[r]}
+                          </Badge>
+                        ))}
+                      </div>
+                    </li>
+                  );
+                })
+              )}
             </ul>
           </ScrollArea>
         </DialogContent>
