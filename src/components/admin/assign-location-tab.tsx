@@ -136,49 +136,54 @@ export function AssignLocationTab() {
   };
 
   return (
-    <div className="space-y-6 mt-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
+    <div className="space-y-8">
+      <Card className="overflow-hidden rounded-2xl border-2 shadow-sm">
+        <CardHeader className="border-b bg-muted/20 pb-6">
+          <CardTitle className="flex items-center gap-3 text-xl">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+              <MapPin className="h-5 w-5" />
+            </span>
             Active locations
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-base">
             Add or remove locations. Then assign locations to users below so sub admins can scope by location.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
+        <CardContent className="space-y-5 pt-6">
+          <div className="flex flex-wrap items-center gap-3">
             <Input
               placeholder="New location name"
               value={newLocationName}
               onChange={(e) => setNewLocationName(e.target.value)}
-              className="max-w-xs"
+              className="max-w-xs rounded-xl border-2 h-11"
               onKeyDown={(e) => e.key === "Enter" && handleAddLocation()}
             />
-            <Button onClick={handleAddLocation} disabled={adding}>
+            <Button onClick={handleAddLocation} disabled={adding} className="rounded-xl h-11 px-5">
               {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               <span className="ml-2">Add location</span>
             </Button>
           </div>
           {locationsLoading ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/20 py-6 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading locations…
             </div>
           ) : activeLocations.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No active locations. Add one above.</p>
+            <p className="rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/10 py-6 text-center text-sm text-muted-foreground">
+              No active locations. Add one above.
+            </p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-3">
               {activeLocations.map((loc) => (
                 <div
                   key={loc.id}
-                  className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2"
+                  className="flex items-center gap-2 rounded-xl border-2 border-border/60 bg-card px-4 py-2.5 shadow-sm transition-all duration-200 hover:border-primary/30 hover:shadow-md"
                 >
-                  <span className="font-medium">{loc.name}</span>
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-foreground">{loc.name}</span>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => setConfirmRemoveId(loc.id)}
                     disabled={removingId === loc.id}
                   >
@@ -195,26 +200,33 @@ export function AssignLocationTab() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Assign locations to users</CardTitle>
-          <CardDescription>
+      <Card className="overflow-hidden rounded-2xl border-2 shadow-sm">
+        <CardHeader className="border-b bg-muted/20 pb-6">
+          <CardTitle className="flex items-center gap-3 text-xl">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+              <MapPin className="h-5 w-5" />
+            </span>
+            Assign locations to users
+          </CardTitle>
+          <CardDescription className="text-base">
             Select users and locations, then click Assign. Selected locations will be added to each user&apos;s
             location list.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 pt-6">
           {activeLocations.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Add at least one location first.</p>
+            <p className="rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/10 py-8 text-center text-sm text-muted-foreground">
+              Add at least one location first.
+            </p>
           ) : (
             <>
               <div className="grid gap-6 sm:grid-cols-2">
-                <div>
-                  <Label className="text-sm font-medium">Users</Label>
-                  <ScrollArea className="h-[200px] rounded-md border p-3 mt-1">
-                    <div className="space-y-2">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Users</Label>
+                  <ScrollArea className="h-[220px] rounded-xl border-2 border-border/60 bg-muted/5 p-4">
+                    <div className="space-y-3">
                       {assignableUsers.map((u) => (
-                        <div key={u.uid} className="flex items-center space-x-2">
+                        <div key={u.uid} className="flex items-center space-x-3 rounded-lg py-1.5">
                           <Checkbox
                             id={`user-${u.uid}`}
                             checked={selectedUserIds.has(u.uid!)}
@@ -222,11 +234,11 @@ export function AssignLocationTab() {
                           />
                           <label
                             htmlFor={`user-${u.uid}`}
-                            className="text-sm cursor-pointer"
+                            className="cursor-pointer text-sm font-medium"
                           >
                             {formatUserDisplayName(u, { showEmail: false })}
                             {(u.locations?.length ?? 0) > 0 && (
-                              <Badge variant="secondary" className="ml-2">
+                              <Badge variant="secondary" className="ml-2 font-medium">
                                 {(u.locations?.length ?? 0)} loc
                               </Badge>
                             )}
@@ -236,18 +248,18 @@ export function AssignLocationTab() {
                     </div>
                   </ScrollArea>
                 </div>
-                <div>
-                  <Label className="text-sm font-medium">Locations to assign</Label>
-                  <ScrollArea className="h-[200px] rounded-md border p-3 mt-1">
-                    <div className="space-y-2">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Locations to assign</Label>
+                  <ScrollArea className="h-[220px] rounded-xl border-2 border-border/60 bg-muted/5 p-4">
+                    <div className="space-y-3">
                       {activeLocations.map((loc) => (
-                        <div key={loc.id} className="flex items-center space-x-2">
+                        <div key={loc.id} className="flex items-center space-x-3 rounded-lg py-1.5">
                           <Checkbox
                             id={`loc-${loc.id}`}
                             checked={selectedLocationIds.has(loc.id)}
                             onCheckedChange={() => toggleLocation(loc.id)}
                           />
-                          <label htmlFor={`loc-${loc.id}`} className="text-sm cursor-pointer">
+                          <label htmlFor={`loc-${loc.id}`} className="cursor-pointer text-sm font-medium">
                             {loc.name}
                           </label>
                         </div>
@@ -259,6 +271,7 @@ export function AssignLocationTab() {
               <Button
                 onClick={handleAssignLocationsToUsers}
                 disabled={assigning || selectedUserIds.size === 0 || selectedLocationIds.size === 0}
+                className="rounded-xl h-11 px-6 font-semibold"
               >
                 {assigning ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Assign locations to selected users

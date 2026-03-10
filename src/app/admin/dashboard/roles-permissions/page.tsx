@@ -114,24 +114,24 @@ export default function RolesPermissionsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "overview" | "assign" | "locations")}>
-        <TabsList className="inline-flex h-12 w-full max-w-2xl rounded-xl border bg-muted/40 p-1 shadow-inner">
+        <TabsList className="inline-flex h-14 w-full max-w-2xl rounded-2xl border-2 border-border/60 bg-gradient-to-r from-muted/60 to-muted/40 p-1.5 shadow-sm">
           <TabsTrigger
             value="overview"
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium transition-all duration-200 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-md"
           >
             <ListChecks className="h-4 w-4" />
             Overview
           </TabsTrigger>
           <TabsTrigger
             value="assign"
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium transition-all duration-200 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-md"
           >
             <UserCog className="h-4 w-4" />
             Assign to User
           </TabsTrigger>
           <TabsTrigger
             value="locations"
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium transition-all duration-200 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-md"
           >
             <MapPin className="h-4 w-4" />
             Assign Location
