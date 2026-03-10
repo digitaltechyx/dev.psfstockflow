@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useCollection } from "@/hooks/use-collection";
-import type { UserProfile } from "@/types";
+import type { UserProfile, UserRole } from "@/types";
 import { hasRole, getUserRoles } from "@/lib/permissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,6 +26,14 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatUserDisplayName } from "@/lib/format-user-display";
 import { ChevronDown } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function RolesPermissionsPage() {
   const router = useRouter();
@@ -34,6 +42,7 @@ export default function RolesPermissionsPage() {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [userSelectOpen, setUserSelectOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "assign" | "locations">("overview");
+  const [selectedRoleForDialog, setSelectedRoleForDialog] = useState<UserRole | null>(null);
 
   const isSuperAdmin = adminUser && hasRole(adminUser, "admin");
 
@@ -76,6 +85,20 @@ export default function RolesPermissionsPage() {
   const selectedUser = useMemo(
     () => nonAdminUsers.find((u) => u.uid === selectedUserId),
     [nonAdminUsers, selectedUserId]
+  );
+
+  const usersWithSelectedRole = useMemo(() => {
+    if (!selectedRoleForDialog) return [];
+    return users
+      .filter((u) => u.status !== "deleted")
+      .filter((u) => getUserRoles(u).includes(selectedRoleForDialog))
+      .sort((a, b) => (a.name || a.email || "").localeCompare(b.name || b.email || ""));
+  }, [users, selectedRoleForDialog]);
+
+  const roleLabelByValue: Record<UserRole, string> = useMemo(
+    () =>
+      Object.fromEntries(ROLE_DEFINITIONS.map((r) => [r.value, r.label])) as Record<UserRole, string>,
+    []
   );
 
   if (!adminUser) {
@@ -165,9 +188,11 @@ export default function RolesPermissionsPage() {
                     const meta = roleMeta[role.value];
                     const count = roleCounts[role.value] ?? 0;
                     return (
-                      <div
+                      <button
                         key={role.value}
-                        className={`group relative overflow-hidden rounded-xl border-2 bg-gradient-to-br ${meta?.accent ?? ""} p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md`}
+                        type="button"
+                        onClick={() => setSelectedRoleForDialog(role.value)}
+                        className={`group relative text-left overflow-hidden rounded-xl border-2 bg-gradient-to-br ${meta?.accent ?? ""} p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background/80 text-foreground shadow-sm">
@@ -180,7 +205,7 @@ export default function RolesPermissionsPage() {
                         <h3 className="mt-3 font-semibold text-foreground">{role.label}</h3>
                         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{role.description}</p>
                         <p className="mt-2 text-xs text-muted-foreground/90">{role.dashboardAccess}</p>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -273,25 +298,40 @@ export default function RolesPermissionsPage() {
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-md p-0" align="start">
-                    <Command>
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] max-w-md p-0"
+                    align="start"
+                    onCloseAutoFocus={(e) => e.preventDefault()}
+                  >
+                    <Command shouldFilter={true}>
                       <CommandInput placeholder="Search users by name or email..." className="h-10" />
                       <CommandList>
                         <CommandEmpty>No user found.</CommandEmpty>
                         <CommandGroup>
-                          {sortedUsersForSelect.map((u) => (
-                            <CommandItem
-                              key={u.uid}
-                              value={`${u.name ?? ""} ${u.email ?? ""} ${u.uid ?? ""}`}
-                              onSelect={() => {
-                                setSelectedUserId(u.uid ?? "");
-                                setUserSelectOpen(false);
-                              }}
-                              className="cursor-pointer"
-                            >
-                              {formatUserDisplayName(u, { showEmail: true })}
-                            </CommandItem>
-                          ))}
+                          {sortedUsersForSelect.map((u) => {
+                            const displayName = formatUserDisplayName(u, { showEmail: true });
+                            const searchValue = [u.name, u.email, u.uid].filter(Boolean).join(" ");
+                            return (
+                              <CommandItem
+                                key={u.uid}
+                                value={searchValue}
+                                onSelect={() => {
+                                  setSelectedUserId(u.uid ?? "");
+                                  setUserSelectOpen(false);
+                                }}
+                                onPointerDown={(e) => e.preventDefault()}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setSelectedUserId(u.uid ?? "");
+                                  setUserSelectOpen(false);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {displayName}
+                              </CommandItem>
+                            );
+                          })}
                         </CommandGroup>
                       </CommandList>
                     </Command>
@@ -321,6 +361,44 @@ export default function RolesPermissionsPage() {
           <AssignLocationTab />
         </TabsContent>
       </Tabs>
+
+      <Dialog open={selectedRoleForDialog !== null} onOpenChange={(open) => !open && setSelectedRoleForDialog(null)}>
+        <DialogContent className="max-w-md sm:max-w-lg max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedRoleForDialog ? roleLabelByValue[selectedRoleForDialog] : ""} — Users
+            </DialogTitle>
+            <DialogDescription>
+              {usersWithSelectedRole.length} user{usersWithSelectedRole.length !== 1 ? "s" : ""} with this role.
+              Each user shows all of their role tags.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="flex-1 min-h-0 -mx-2 px-2">
+            <ul className="space-y-2 pb-4">
+              {usersWithSelectedRole.map((u) => {
+                const roles = getUserRoles(u);
+                return (
+                  <li
+                    key={u.uid}
+                    className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-muted/20 p-3"
+                  >
+                    <span className="font-medium text-foreground">
+                      {formatUserDisplayName(u, { showEmail: true })}
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {roles.map((r) => (
+                        <Badge key={r} variant="secondary" className="text-xs font-medium">
+                          {roleLabelByValue[r]}
+                        </Badge>
+                      ))}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
