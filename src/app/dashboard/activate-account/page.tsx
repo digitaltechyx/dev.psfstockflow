@@ -14,9 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, FileSignature, Building2, User } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Loader2, FileSignature, Building2, User, CheckCircle2, Mail, Phone, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { hasRole, isAccountActivated } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 
 const effectiveDate = format(new Date(), "MMMM d, yyyy");
 
@@ -121,145 +123,166 @@ export default function ActivateAccountPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 py-8 px-4">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold tracking-tight">Activate your account</h1>
-        <p className="text-muted-foreground mt-1">
-          Accept the Master Service Agreement to unlock your dashboard and features.
-        </p>
-      </div>
+    <div className="min-h-full bg-gradient-to-b from-muted/20 to-background">
+      <div className="mx-auto max-w-3xl space-y-8 py-10 px-4 sm:px-6">
+        <div className="text-center space-y-2">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-2">
+            <FileSignature className="h-7 w-7" />
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Activate your account</h1>
+          <p className="text-muted-foreground max-w-md mx-auto">
+            Accept the Master Service Agreement to unlock your dashboard and features.
+          </p>
+          <p className="text-sm text-muted-foreground/80">Effective date: {effectiveDate}</p>
+        </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Agreement intro */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileSignature className="h-5 w-5" />
+        <Card className="overflow-hidden border-2 shadow-sm rounded-2xl">
+          <CardHeader className="bg-muted/30 border-b pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileSignature className="h-5 w-5 text-primary" />
               Master Service Agreement
             </CardTitle>
-            <CardDescription>
-              This Master Service Agreement (“Agreement”) is entered into as of {effectiveDate}, by and between:
+            <CardDescription className="text-base">
+              This Agreement is entered into as of <span className="font-medium text-foreground">{effectiveDate}</span>, by and between:
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-8 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">Service Provider</Label>
-              <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-                <p className="font-semibold">{MSA_SERVICE_PROVIDER.name}</p>
-                <p className="whitespace-pre-line text-muted-foreground">{MSA_SERVICE_PROVIDER.address}</p>
-                <p className="text-muted-foreground">
-                  {MSA_SERVICE_PROVIDER.email} | {MSA_SERVICE_PROVIDER.phone}
+          <CardContent className="p-6 grid gap-6 sm:grid-cols-2">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <Label className="text-sm font-semibold text-muted-foreground">Service Provider</Label>
+              </div>
+              <div className="rounded-xl border bg-muted/20 p-4 space-y-2 text-sm">
+                <p className="font-semibold text-foreground">{MSA_SERVICE_PROVIDER.name}</p>
+                <p className="flex items-start gap-2 text-muted-foreground">
+                  <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span className="whitespace-pre-line">{MSA_SERVICE_PROVIDER.address}</span>
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">(Service Provider)</p>
+                <p className="flex items-center gap-2 text-muted-foreground">
+                  <Mail className="h-4 w-4 shrink-0" />
+                  {MSA_SERVICE_PROVIDER.email}
+                </p>
+                <p className="flex items-center gap-2 text-muted-foreground">
+                  <Phone className="h-4 w-4 shrink-0" />
+                  {MSA_SERVICE_PROVIDER.phone}
+                </p>
+                <p className="text-xs text-muted-foreground/80 pt-1">(Service Provider)</p>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">Client</Label>
-              <div className="space-y-3 rounded-lg border bg-background p-4">
-                <div>
-                  <Label htmlFor="companyName" className="text-xs">Legal Company Name</Label>
-                  <Input
-                    id="companyName"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="[Client Legal Company Name]"
-                    className="mt-1"
-                    required
-                  />
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <User className="h-4 w-4" />
                 </div>
-                <div>
-                  <Label htmlFor="address" className="text-xs">Address</Label>
-                  <Textarea
-                    id="address"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="[Client Legal Company Address]"
-                    className="mt-1 min-h-[60px]"
-                    required
-                  />
+                <Label className="text-sm font-semibold text-muted-foreground">Client (your details)</Label>
+              </div>
+              <div className="space-y-3 rounded-xl border-2 border-dashed border-muted-foreground/20 bg-background p-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="companyName" className="text-xs font-medium">Legal Company Name</Label>
+                  <Input id="companyName" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Your company name" className="h-9" required />
                 </div>
-                <div>
-                  <Label htmlFor="email" className="text-xs">Email / Phone</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Email"
-                      required
-                    />
-                    <Input
-                      id="phone"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="Phone"
-                      required
-                    />
+                <div className="space-y-1.5">
+                  <Label htmlFor="address" className="text-xs font-medium">Address</Label>
+                  <Textarea id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full address" className="min-h-[72px] resize-none text-sm" required />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email" className="text-xs font-medium">Email</Label>
+                    <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="h-9" required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="phone" className="text-xs font-medium">Phone</Label>
+                    <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" className="h-9" required />
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">(Client)</p>
+                <p className="text-xs text-muted-foreground/80">(Client)</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Agreement sections */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="prose prose-sm max-w-none space-y-6">
-              {MSA_AGREEMENT_SECTIONS.map((section) => (
-                <div key={section.title}>
-                  <h3 className="font-semibold text-foreground">{section.title}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">{section.body}</p>
-                </div>
-              ))}
-            </div>
+        <Card className="overflow-hidden rounded-2xl border-2 shadow-sm">
+          <CardHeader className="bg-muted/20 border-b py-4">
+            <CardTitle className="text-base">Agreement terms</CardTitle>
+            <CardDescription>Please read the full agreement below.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ScrollArea className="h-[320px] w-full px-6 py-4">
+              <div className="space-y-5 pr-4">
+                {MSA_AGREEMENT_SECTIONS.map((section, i) => (
+                  <div key={section.title} className={cn(i > 0 && "pt-4 border-t border-border/60")}>
+                    <h3 className="font-semibold text-foreground text-sm uppercase tracking-wide mb-1.5">
+                      {section.title}
+                    </h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed">{section.body}</p>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
           </CardContent>
         </Card>
 
-        {/* Acceptance */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Acceptance</CardTitle>
+        <Card className="overflow-hidden rounded-2xl border-2 border-primary/20 bg-primary/5 shadow-md">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <CheckCircle2 className="h-5 w-5 text-primary" />
+              Acceptance
+            </CardTitle>
             <CardDescription>
               By activating, you agree to be legally bound by this Agreement.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-start gap-3">
+          <CardContent className="space-y-5">
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-background/80 border">
               <Checkbox
                 id="agree"
                 checked={agreed}
                 onCheckedChange={(c) => setAgreed(!!c)}
+                className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
               />
-              <label htmlFor="agree" className="text-sm leading-relaxed cursor-pointer">
+              <label htmlFor="agree" className="text-sm font-medium leading-relaxed cursor-pointer select-none">
                 I am authorized and agree to be legally bound by this agreement.
               </label>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="legalName">Legal name (required)</Label>
+              <Label htmlFor="legalName" className="text-sm font-medium">
+                Legal name <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="legalName"
                 value={legalName}
                 onChange={(e) => setLegalName(e.target.value)}
-                placeholder="Full legal name"
+                placeholder="Full legal name as on agreement"
+                className="h-11 max-w-md"
                 required
               />
             </div>
-            <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
+            <Button
+              type="submit"
+              disabled={submitting}
+              size="lg"
+              className="w-full sm:w-auto min-w-[200px] h-12 text-base font-semibold shadow-lg"
+            >
               {submitting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Activating...
                 </>
               ) : (
-                "Activate account"
+                <>
+                  <CheckCircle2 className="mr-2 h-5 w-5" />
+                  Activate account
+                </>
               )}
             </Button>
           </CardContent>
         </Card>
       </form>
+      </div>
     </div>
   );
 }
