@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { adminDb } from "@/lib/firebase-admin";
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,10 +12,11 @@ export async function GET(request: NextRequest) {
 
     if (!refreshToken) {
       try {
-        const systemDoc = await getDoc(doc(db, "system", "oneDrive"));
-        if (systemDoc.exists()) {
+        const db = adminDb();
+        const systemDoc = await db.collection("system").doc("oneDrive").get();
+        if (systemDoc.exists) {
           const data = systemDoc.data();
-          refreshToken = data.refreshToken;
+          refreshToken = data?.refreshToken;
         }
       } catch {
         // ignore

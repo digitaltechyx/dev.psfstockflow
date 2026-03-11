@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { adminDb } from "@/lib/firebase-admin";
 
 export async function GET(request: NextRequest) {
   try {
@@ -84,8 +83,8 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      await setDoc(
-        doc(db, "system", "oneDrive"),
+      const db = adminDb();
+      await db.collection("system").doc("oneDrive").set(
         {
           refreshToken,
           accessToken: tokenData.access_token,
