@@ -97,7 +97,7 @@ export async function uploadPDF(
     }
 
     if (!response.ok) {
-      let errorMessage = "Failed to upload PDF to OneDrive";
+      let errorMessage = "Label upload failed.";
       let errorDetails = '';
       try {
         const errorData = await response.json();
@@ -159,7 +159,7 @@ export async function uploadPDF(
     }
     return {
       success: false,
-      error: error.message || "Failed to upload PDF to OneDrive",
+      error: error.message || "Label upload failed.",
     };
   }
 }

@@ -14,10 +14,7 @@ export async function POST(request: NextRequest) {
     if (!tokenRes.ok) {
       const err = await tokenRes.json();
       return NextResponse.json(
-        {
-          error: err.error || "Failed to get OneDrive access token",
-          hint: err.hint || "Connect OneDrive first from the admin dashboard.",
-        },
+        { error: "Label upload failed." },
         { status: tokenRes.status || 500 }
       );
     }
@@ -30,6 +27,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
     const clientName = formData.get("clientName") as string;
     const folderPath = formData.get("folderPath") as string;
+    const suggestedFileName = formData.get("fileName") as string | null;
 
     if (!file || !clientName || !folderPath) {
       return NextResponse.json(
@@ -47,7 +45,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const fileName = file.name || "label.pdf";
+    let fileName = (file.name || suggestedFileName || "").trim();
+    if (!fileName || fileName === "blob") {
+      const ext = file.type === "application/pdf" ? "pdf" : (file.type.split("/")[1] || "png");
+      fileName = `label-${Date.now()}.${ext}`;
+    }
+    if (!fileName.includes(".")) {
+      const ext = file.type === "application/pdf" ? "pdf" : (file.type.split("/")[1] || "png");
+      fileName = `${fileName}.${ext}`;
+    }
     const pathForGraph = `${folderPath}/${fileName}`.replace(/\/+/g, "/");
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -73,7 +79,7 @@ export async function POST(request: NextRequest) {
       const errText = await uploadRes.text();
       console.error("OneDrive upload error:", errText);
       return NextResponse.json(
-        { error: "OneDrive upload failed", details: errText },
+        { error: "Label upload failed." },
         { status: 500 }
       );
     }
@@ -96,9 +102,7 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error("OneDrive upload error:", error);
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to upload to OneDrive",
-      },
+      { error: "Label upload failed." },
       { status: 500 }
     );
   }

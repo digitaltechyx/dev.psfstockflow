@@ -434,6 +434,11 @@ export function CreateShipmentWithLabelsForm({ inventory }: CreateShipmentWithLa
     const formData = new FormData();
     formData.append('file', fileToUpload);
     formData.append('clientName', clientName);
+    if (fileToUpload.name && fileToUpload.name !== 'blob') {
+      formData.append('fileName', fileToUpload.name);
+    } else if (file.name && file.name !== 'blob') {
+      formData.append('fileName', file.name);
+    }
     const year = currentDate.getFullYear().toString();
     const month = currentDate.toLocaleString('en-US', { month: 'long' });
     const dateStr = currentDate.toISOString().split('T')[0];
@@ -442,18 +447,18 @@ export function CreateShipmentWithLabelsForm({ inventory }: CreateShipmentWithLa
     const response = await fetch('/api/onedrive/upload', { method: 'POST', body: formData });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to upload label to OneDrive');
+      throw new Error(errorData.error || 'Label upload failed.');
     }
     const result = await response.json();
-    const downloadURL = result.downloadURL || result.webUrl;
-    if (!downloadURL) throw new Error('No download URL received from OneDrive');
+    const urlToStore = result.webUrl || result.downloadURL;
+    if (!urlToStore) throw new Error('Label upload failed.');
 
     setLabelStates(prev => {
       const items = [...(prev[groupIndex]?.items ?? [])];
-      if (items[itemIndex]) items[itemIndex] = { ...items[itemIndex], uploadedUrl: downloadURL };
+      if (items[itemIndex]) items[itemIndex] = { ...items[itemIndex], uploadedUrl: urlToStore };
       return { ...prev, [groupIndex]: { ...prev[groupIndex], items, isUploading: prev[groupIndex]?.isUploading ?? false } };
     });
-    return downloadURL;
+    return urlToStore;
   };
 
   const handleLabelUpload = async (groupIndex: number): Promise<string[]> => {
@@ -477,7 +482,7 @@ export function CreateShipmentWithLabelsForm({ inventory }: CreateShipmentWithLa
       if (urls.length > 0) {
         toast({
           title: "Success",
-          description: urls.length === 1 ? "Label uploaded successfully to OneDrive!" : `${urls.length} labels uploaded successfully!`,
+          description: urls.length === 1 ? "Label uploaded successfully!" : `${urls.length} labels uploaded successfully!`,
         });
       }
       return allUrls;
@@ -486,7 +491,7 @@ export function CreateShipmentWithLabelsForm({ inventory }: CreateShipmentWithLa
       toast({
         variant: "destructive",
         title: "Upload Failed",
-        description: error.message || "Failed to upload label. Please try again.",
+        description: error.message || "Label upload failed. Please try again.",
       });
       setLabelStates(prev => ({ ...prev, [groupIndex]: { ...prev[groupIndex], isUploading: false } }));
       return items.map((i) => i.uploadedUrl).filter(Boolean) as string[];
