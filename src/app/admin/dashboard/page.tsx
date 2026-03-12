@@ -413,6 +413,7 @@ export default function AdminDashboardPage() {
   const [integrationLoading, setIntegrationLoading] = useState(true);
   const [oneDriveConnected, setOneDriveConnected] = useState<boolean | null>(null);
   const [oneDriveChecking, setOneDriveChecking] = useState(true);
+  const [oneDriveDisconnecting, setOneDriveDisconnecting] = useState(false);
 
   useEffect(() => {
     const fetchPendingInvoices = async () => {
@@ -900,10 +901,37 @@ export default function AdminDashboardPage() {
                   Checking…
                 </p>
               ) : oneDriveConnected ? (
-                <p className="flex items-center gap-2 text-sm font-medium text-emerald-600">
-                  <CheckCircle className="h-4 w-4" />
-                  Connected
-                </p>
+                <div className="space-y-2">
+                  <p className="flex items-center gap-2 text-sm font-medium text-emerald-600">
+                    <CheckCircle className="h-4 w-4" />
+                    Connected
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setOneDriveDisconnecting(true);
+                      try {
+                        const res = await fetch("/api/onedrive/disconnect", { method: "POST" });
+                        if (res.ok) {
+                          setOneDriveConnected(false);
+                        }
+                      } finally {
+                        setOneDriveDisconnecting(false);
+                      }
+                    }}
+                    disabled={oneDriveDisconnecting}
+                    className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {oneDriveDisconnecting ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        Disconnecting…
+                      </>
+                    ) : (
+                      "Disconnect"
+                    )}
+                  </button>
+                </div>
               ) : (
                 <div className="space-y-2">
                   <p className="flex items-center gap-2 text-sm text-amber-600">
