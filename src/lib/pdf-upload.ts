@@ -1,4 +1,4 @@
-import { buildGoogleDrivePath, getFolderInfo } from "./google-drive";
+import { buildGoogleDrivePath, getFolderInfo as getDriveFolderInfo } from "./google-drive";
 
 /**
  * Get month name from date
@@ -67,11 +67,11 @@ export async function uploadPDF(
       };
     }
 
-    // Build storage path
+    // Build folder path (OneDrive: Year/Month/ClientName/Date — filename is added by API)
     const currentDate = new Date();
-    const storagePath = buildStoragePath(file.name, clientName, currentDate);
+    const { year, month, date } = getDriveFolderInfo(currentDate);
+    const folderPath = `${year}/${month}/${clientName}/${date}`;
 
-    // Simulate progress for Google Drive upload
     if (onProgress) {
       onProgress({
         progress: 10,
@@ -79,14 +79,12 @@ export async function uploadPDF(
       });
     }
 
-    // Create form data
     const formData = new FormData();
     formData.append('file', file);
     formData.append('clientName', clientName);
-    formData.append('folderPath', storagePath);
+    formData.append('folderPath', folderPath);
 
-    // Upload to Google Drive via API route
-    const response = await fetch('/api/drive/upload', {
+    const response = await fetch('/api/onedrive/upload', {
       method: 'POST',
       body: formData,
     });
@@ -99,7 +97,7 @@ export async function uploadPDF(
     }
 
     if (!response.ok) {
-      let errorMessage = "Failed to upload PDF to Google Drive";
+      let errorMessage = "Failed to upload PDF to OneDrive";
       let errorDetails = '';
       try {
         const errorData = await response.json();
@@ -161,7 +159,7 @@ export async function uploadPDF(
     }
     return {
       success: false,
-      error: error.message || "Failed to upload PDF",
+      error: error.message || "Failed to upload PDF to OneDrive",
     };
   }
 }

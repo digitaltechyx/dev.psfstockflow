@@ -21,6 +21,10 @@ import {
   AlertTriangle,
   Wallet,
   ArrowRight,
+  CloudUpload,
+  CheckCircle,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -407,6 +411,8 @@ export default function AdminDashboardPage() {
     ebay: 0,
   });
   const [integrationLoading, setIntegrationLoading] = useState(true);
+  const [oneDriveConnected, setOneDriveConnected] = useState<boolean | null>(null);
+  const [oneDriveChecking, setOneDriveChecking] = useState(true);
 
   useEffect(() => {
     const fetchPendingInvoices = async () => {
@@ -496,6 +502,22 @@ export default function AdminDashboardPage() {
       }
     };
     run();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/onedrive/token")
+      .then((res) => {
+        if (cancelled) return;
+        setOneDriveConnected(res.ok);
+      })
+      .catch(() => {
+        if (!cancelled) setOneDriveConnected(false);
+      })
+      .finally(() => {
+        if (!cancelled) setOneDriveChecking(false);
+      });
+    return () => { cancelled = true; };
   }, []);
 
   const [chartData, setChartData] = useState<{
@@ -858,6 +880,46 @@ export default function AdminDashboardPage() {
               </div>
           </CardContent>
         </Card>
+
+          <Card className="overflow-hidden rounded-xl border-slate-200/80 bg-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.06)] lg:col-span-4">
+            <CardHeader className="pb-2 pt-6 px-6">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600">
+                  <CloudUpload className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">Label storage (OneDrive)</CardTitle>
+                  <CardDescription className="text-slate-500">Labels uploaded in Create Shipment go here</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              {oneDriveChecking ? (
+                <p className="flex items-center gap-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Checking…
+                </p>
+              ) : oneDriveConnected ? (
+                <p className="flex items-center gap-2 text-sm font-medium text-emerald-600">
+                  <CheckCircle className="h-4 w-4" />
+                  Connected
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="flex items-center gap-2 text-sm text-amber-600">
+                    <XCircle className="h-4 w-4" />
+                    Not connected
+                  </p>
+                  <a
+                    href="/api/onedrive/auth"
+                    className="inline-flex items-center rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700"
+                  >
+                    Connect OneDrive
+                  </a>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </section>
 
         {/* Charts row 1: Trend + Status donut */}

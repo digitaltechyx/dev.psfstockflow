@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: err.error || "Failed to get OneDrive access token",
-          hint: err.hint || "Connect OneDrive first via One Drive Test page.",
+          hint: err.hint || "Connect OneDrive first from the admin dashboard.",
         },
         { status: tokenRes.status || 500 }
       );

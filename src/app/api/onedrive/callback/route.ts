@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     if (!code) {
       return new NextResponse(
-        "<!DOCTYPE html><html><body><h1>OneDrive Callback</h1><p>No code received. Start from Dashboard → One Drive Test and click Connect OneDrive.</p></body></html>",
+        "<!DOCTYPE html><html><body><h1>OneDrive Callback</h1><p>No code received. Start again from the admin dashboard and click the Connect OneDrive button.</p></body></html>",
         { headers: { "Content-Type": "text/html" } }
       );
     }
@@ -114,12 +114,12 @@ export async function GET(request: NextRequest) {
         <body>
           <div class="container">
             <h1>OneDrive connected</h1>
-            <p class="success">Your OneDrive account is connected. You can close this window and use the One Drive Test page to upload labels.</p>
+            <p class="success">Your OneDrive account is connected. You can close this window and use the dashboard to upload labels.</p>
             <div class="info">
               <p><strong>Optional – env:</strong> You can set <code>ONEDRIVE_REFRESH_TOKEN</code> to the value below if you prefer not to use Firestore.</p>
               <p><code>${refreshToken}</code></p>
             </div>
-            <p><a href="/dashboard/onedrive-test">Go to One Drive Test page</a></p>
+            <p><a href="/admin/dashboard">Go to Admin dashboard</a></p>
           </div>
         </body>
       </html>

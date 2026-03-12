@@ -439,14 +439,14 @@ export function CreateShipmentWithLabelsForm({ inventory }: CreateShipmentWithLa
     const dateStr = currentDate.toISOString().split('T')[0];
     formData.append('folderPath', `${year}/${month}/${clientName}/${dateStr}`);
 
-    const response = await fetch('/api/drive/upload', { method: 'POST', body: formData });
+    const response = await fetch('/api/onedrive/upload', { method: 'POST', body: formData });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to upload label to Google Drive');
+      throw new Error(errorData.error || 'Failed to upload label to OneDrive');
     }
     const result = await response.json();
     const downloadURL = result.downloadURL || result.webUrl;
-    if (!downloadURL) throw new Error('No download URL received from Google Drive');
+    if (!downloadURL) throw new Error('No download URL received from OneDrive');
 
     setLabelStates(prev => {
       const items = [...(prev[groupIndex]?.items ?? [])];
@@ -477,7 +477,7 @@ export function CreateShipmentWithLabelsForm({ inventory }: CreateShipmentWithLa
       if (urls.length > 0) {
         toast({
           title: "Success",
-          description: urls.length === 1 ? "Label uploaded successfully to Google Drive!" : `${urls.length} labels uploaded successfully!`,
+          description: urls.length === 1 ? "Label uploaded successfully to OneDrive!" : `${urls.length} labels uploaded successfully!`,
         });
       }
       return allUrls;

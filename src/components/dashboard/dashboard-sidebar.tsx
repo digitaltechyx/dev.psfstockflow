@@ -35,7 +35,6 @@ import {
   ArrowLeftRight,
   FolderOpen,
   Plug,
-  CloudUpload,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useCollection } from "@/hooks/use-collection";
@@ -196,15 +195,6 @@ export function DashboardSidebar() {
       badge: null,
       requiredRole: "user" as const,
       requiredFeature: "integrations" as const,
-    },
-    {
-      title: "One Drive Test",
-      url: "/dashboard/onedrive-test",
-      icon: CloudUpload,
-      color: "text-sky-600",
-      badge: null,
-      requiredRole: "user" as const,
-      requiredFeature: "view_dashboard" as const,
     },
     {
       title: "Affiliate",
