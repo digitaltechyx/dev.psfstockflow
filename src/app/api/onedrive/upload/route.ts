@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let fileName = (file.name || suggestedFileName || "").trim();
+    let fileName = (suggestedFileName || file.name || "").trim();
     if (!fileName || fileName === "blob") {
       const ext = file.type === "application/pdf" ? "pdf" : (file.type.split("/")[1] || "png");
       fileName = `label-${Date.now()}.${ext}`;
@@ -91,13 +91,36 @@ export async function POST(request: NextRequest) {
       "@microsoft.graph.downloadUrl"?: string;
     };
 
+    let viewUrl = item.webUrl;
+    if (item.id && accessToken) {
+      try {
+        const linkRes = await fetch(
+          `${GRAPH_BASE}/me/drive/items/${item.id}/createLink`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ type: "view", scope: "anonymous" }),
+          }
+        );
+        if (linkRes.ok) {
+          const linkData = (await linkRes.json()) as { link?: { webUrl?: string } };
+          if (linkData.link?.webUrl) viewUrl = linkData.link.webUrl;
+        }
+      } catch {
+        // keep viewUrl as item.webUrl if createLink fails
+      }
+    }
+
     return NextResponse.json({
       success: true,
       fileId: item.id,
       fileName: item.name,
       storagePath: pathForGraph,
       downloadURL: item["@microsoft.graph.downloadUrl"] || item.webUrl,
-      webUrl: item.webUrl,
+      webUrl: viewUrl || item.webUrl,
     });
   } catch (error: unknown) {
     console.error("OneDrive upload error:", error);

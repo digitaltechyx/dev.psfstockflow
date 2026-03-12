@@ -434,10 +434,9 @@ export function CreateShipmentWithLabelsForm({ inventory }: CreateShipmentWithLa
     const formData = new FormData();
     formData.append('file', fileToUpload);
     formData.append('clientName', clientName);
-    if (fileToUpload.name && fileToUpload.name !== 'blob') {
-      formData.append('fileName', fileToUpload.name);
-    } else if (file.name && file.name !== 'blob') {
-      formData.append('fileName', file.name);
+    const originalName = file.name || fileToUpload.name;
+    if (originalName && originalName !== 'blob') {
+      formData.append('fileName', originalName);
     }
     const year = currentDate.getFullYear().toString();
     const month = currentDate.toLocaleString('en-US', { month: 'long' });
