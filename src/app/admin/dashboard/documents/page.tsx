@@ -39,7 +39,7 @@ interface DocumentRequest {
   id: string;
   userId: string;
   documentType: string;
-  status: "pending" | "complete";
+  status: "pending" | "complete" | "rejected";
   requestedAt: any;
   completedAt?: any;
   documentUrl?: string;
@@ -50,6 +50,9 @@ interface DocumentRequest {
   email?: string;
   userEmail?: string;
   userName?: string;
+  clientLegalName?: string;
+  /** How the request was fulfilled: approved from template vs uploaded file. */
+  decisionType?: "approved" | "uploaded";
 }
 
 export default function DocumentRequestsPage() {
@@ -169,6 +172,48 @@ export default function DocumentRequestsPage() {
     setSelectedRequest(request);
     setFile(null);
     setUploadDialogOpen(true);
+  };
+
+  const handleApproveRequest = async (request: DocumentRequest) => {
+    try {
+      const requestRef = doc(db, `users/${request.userId}/documentRequests`, request.id);
+      await updateDoc(requestRef, {
+        status: "complete",
+        completedAt: Timestamp.now(),
+        decisionType: "approved",
+      });
+      toast({
+        title: "Request Approved",
+        description: "The document request has been approved.",
+      });
+    } catch (error: any) {
+      console.error("Error approving document request:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to approve request. Please try again.",
+      });
+    }
+  };
+
+  const handleRejectRequest = async (request: DocumentRequest) => {
+    try {
+      const requestRef = doc(db, `users/${request.userId}/documentRequests`, request.id);
+      await updateDoc(requestRef, {
+        status: "rejected",
+      });
+      toast({
+        title: "Request Rejected",
+        description: "The document request has been rejected.",
+      });
+    } catch (error: any) {
+      console.error("Error rejecting document request:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to reject request. Please try again.",
+      });
+    }
   };
 
   const handleUploadDocument = async () => {
@@ -520,7 +565,7 @@ export default function DocumentRequestsPage() {
                 Pending Requests
               </CardTitle>
               <CardDescription>
-                Document requests awaiting your review and upload
+                Document requests awaiting your review, approval, upload, or rejection
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -574,6 +619,11 @@ export default function DocumentRequestsPage() {
                               Email: {request.email}
                             </p>
                           )}
+                          {request.clientLegalName && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Client signature: {request.clientLegalName}
+                            </p>
+                          )}
                           <p className="text-sm text-muted-foreground mt-1">
                             Requested {format(new Date(request.requestedAt?.seconds * 1000 || Date.now()), "MMM d, yyyy 'at' h:mm a")}
                           </p>
@@ -584,13 +634,31 @@ export default function DocumentRequestsPage() {
                           )}
                         </div>
                       </div>
-                      <Button
-                        onClick={() => handleOpenUploadDialog(request)}
-                        className="ml-4"
-                      >
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload Document
-                      </Button>
+                      <div className="flex flex-col gap-2 ml-4">
+                        <Button
+                          size="sm"
+                          onClick={() => handleApproveRequest(request)}
+                        >
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenUploadDialog(request)}
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          Upload
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => handleRejectRequest(request)}
+                        >
+                          Reject
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

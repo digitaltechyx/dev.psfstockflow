@@ -28,7 +28,7 @@ interface DocumentRequest {
   id: string;
   userId: string;
   documentType: string;
-  status: "pending" | "complete";
+  status: "pending" | "complete" | "rejected";
   requestedAt: any;
   completedAt?: any;
   documentUrl?: string;
@@ -37,16 +37,22 @@ interface DocumentRequest {
   companyName?: string;
   contact?: string;
   email?: string;
+  /** Client legal name typed as signature on the agreement. */
+  clientLegalName?: string;
+  /** How the request was fulfilled: approved using template vs uploaded file. */
+  decisionType?: "approved" | "uploaded";
 }
 
 export default function DocumentsPage() {
   const { userProfile, user } = useAuth();
   const { toast } = useToast();
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [requestStep, setRequestStep] = useState<1 | 2>(1);
   const [notes, setNotes] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [contact, setContact] = useState("");
   const [email, setEmail] = useState("");
+  const [clientLegalName, setClientLegalName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [msaDownloading, setMsaDownloading] = useState(false);
 
@@ -54,7 +60,7 @@ export default function DocumentsPage() {
     userProfile ? `users/${userProfile.uid}/documentRequests` : ""
   );
 
-  const handleRequestDocument = async () => {
+  const validateStepOne = () => {
     if (!userProfile || !user) {
       toast({
         variant: "destructive",
@@ -64,7 +70,6 @@ export default function DocumentsPage() {
       return;
     }
 
-    // Validate required fields
     if (!companyName || companyName.trim().length === 0) {
       toast({
         variant: "destructive",
@@ -92,7 +97,15 @@ export default function DocumentsPage() {
       return;
     }
 
-    // Validate email format
+    if (!clientLegalName || clientLegalName.trim().length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Client legal name (signature) is required.",
+      });
+      return;
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
       toast({
@@ -103,17 +116,43 @@ export default function DocumentsPage() {
       return;
     }
 
+    return true;
+  };
+
+  const handleNextFromDetails = () => {
+    const ok = validateStepOne();
+    if (ok) {
+      setRequestStep(2);
+    }
+  };
+
+  const handleRequestDocument = async () => {
+    if (!userProfile || !user) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please log in to request documents.",
+      });
+      return;
+    }
+
+    // Revalidate in case user bypassed step
+    if (!validateStepOne()) return;
+
     setIsSubmitting(true);
     try {
       // Build the request data object
       const requestData: any = {
         userId: userProfile.uid,
-        documentType: "Service Document",
+        documentType: "Fulfillment & Prep Services Agreement",
         status: "pending",
         requestedAt: Timestamp.now(),
         companyName: companyName.trim(),
         contact: contact.trim(),
         email: email.trim(),
+        clientLegalName: clientLegalName.trim(),
+        // Service provider signature is always Prep Services FBA in this flow
+        serviceProviderName: "Prep Services FBA LLC",
       };
 
       // Only include notes if it has a non-empty value
@@ -125,13 +164,15 @@ export default function DocumentsPage() {
 
       toast({
         title: "Request Submitted",
-        description: "Your document request has been submitted. Admin will review and upload it soon.",
+        description: "Your agreement request has been submitted. Admin will review and approve or upload it.",
       });
 
       setNotes("");
       setCompanyName("");
       setContact("");
       setEmail("");
+      setClientLegalName("");
+      setRequestStep(1);
       setRequestDialogOpen(false);
     } catch (error: any) {
       console.error("Error submitting document request:", error);
@@ -197,7 +238,15 @@ export default function DocumentsPage() {
             Request and download your service documents
           </p>
         </div>
-        <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
+        <Dialog
+          open={requestDialogOpen}
+          onOpenChange={(open) => {
+            setRequestDialogOpen(open);
+            if (!open) {
+              setRequestStep(1);
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button>
               <FileText className="mr-2 h-4 w-4" />
@@ -206,81 +255,135 @@ export default function DocumentsPage() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Request Service Document</DialogTitle>
+              <DialogTitle>Fulfillment & Prep Services Agreement</DialogTitle>
               <DialogDescription>
-                Submit a request for a service document. Admin will review and upload it.
+                Fill your company details and sign digitally. On the next step you can optionally add notes for the admin.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Document Type</Label>
-                <Input value="Service Document" disabled />
+            {requestStep === 1 ? (
+              <div className="space-y-4 py-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-md border p-3 text-sm">
+                  <div className="space-y-1">
+                    <p className="font-semibold">Service Provider</p>
+                    <p className="text-muted-foreground">Prep Services FBA LLC</p>
+                    <p className="text-muted-foreground text-xs">Email: info@prepservicesfba.com</p>
+                    <p className="text-muted-foreground text-xs">Phone: +1 347 651 3010</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-semibold">Client</p>
+                    <p className="text-muted-foreground text-xs">
+                      Please fill your company details below. These will appear on the agreement.
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="companyName">
+                    Company Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="companyName"
+                    placeholder="Enter company name"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="contact">
+                    Contact <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="contact"
+                    placeholder="Enter contact number"
+                    value={contact}
+                    onChange={(e) => setContact(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">
+                    Email <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="Enter email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="clientLegalName">
+                    Client Legal Name (signature) <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="clientLegalName"
+                    placeholder="Type your full legal name"
+                    value={clientLegalName}
+                    onChange={(e) => setClientLegalName(e.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This will appear on the agreement as the client signature. Service provider will be shown as{" "}
+                    <span className="font-medium">Prep Services FBA LLC</span>.
+                  </p>
+                </div>
+                <Button
+                  onClick={handleNextFromDetails}
+                  className="w-full"
+                >
+                  Next
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="companyName">
-                  Company Name <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="companyName"
-                  placeholder="Enter company name"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  required
-                />
+            ) : (
+              <div className="space-y-4 py-4">
+                <div className="space-y-1">
+                  <p className="font-medium">Review & Notes (optional)</p>
+                  <p className="text-sm text-muted-foreground">
+                    Add any notes if you want the admin to modify or add clauses to the agreement (optional).
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notes (Optional)</Label>
+                  <Textarea
+                    id="notes"
+                    placeholder="Example: Please adjust pricing paragraph, or add my warehouse address..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={4}
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-32"
+                    onClick={() => setRequestStep(1)}
+                    disabled={isSubmitting}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    onClick={handleRequestDocument}
+                    disabled={isSubmitting}
+                    className="flex-1"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Submit Request
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="contact">
-                  Contact <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="contact"
-                  placeholder="Enter contact number"
-                  value={contact}
-                  onChange={(e) => setContact(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">
-                  Email <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter email address"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes (Optional)</Label>
-                <Textarea
-                  id="notes"
-                  placeholder="Add any additional notes or requirements..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={4}
-                />
-              </div>
-              <Button
-                onClick={handleRequestDocument}
-                disabled={isSubmitting}
-                className="w-full"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Submit Request
-                  </>
-                )}
-              </Button>
-            </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
