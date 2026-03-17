@@ -41,18 +41,35 @@ interface DocumentRequest {
   clientLegalName?: string;
   /** How the request was fulfilled: approved using template vs uploaded file. */
   decisionType?: "approved" | "uploaded";
+  /** Partnership agreement fields */
+  partnerAgencyName?: string;
+  address?: string;
+  phone?: string;
+  partnerAuthorizedName?: string;
+  partnerTitle?: string;
 }
+
+const DOCUMENT_TYPES = [
+  { id: "fulfillment" as const, label: "Fulfillment & Prep Services Agreement", description: "Warehousing, prep, and fulfillment services" },
+  { id: "partnership" as const, label: "B2B Partnership Agreement", description: "Referral and strategic partnership" },
+];
 
 export default function DocumentsPage() {
   const { userProfile, user } = useAuth();
   const { toast } = useToast();
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [selectedDocumentType, setSelectedDocumentType] = useState<"fulfillment" | "partnership" | null>(null);
   const [requestStep, setRequestStep] = useState<1 | 2>(1);
   const [notes, setNotes] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [contact, setContact] = useState("");
   const [email, setEmail] = useState("");
   const [clientLegalName, setClientLegalName] = useState("");
+  const [partnerAgencyName, setPartnerAgencyName] = useState("");
+  const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
+  const [partnerAuthorizedName, setPartnerAuthorizedName] = useState("");
+  const [partnerTitle, setPartnerTitle] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [msaDownloading, setMsaDownloading] = useState(false);
 
@@ -62,61 +79,62 @@ export default function DocumentsPage() {
 
   const validateStepOne = () => {
     if (!userProfile || !user) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Please log in to request documents.",
-      });
-      return;
+      toast({ variant: "destructive", title: "Error", description: "Please log in to request documents." });
+      return false;
     }
-
-    if (!companyName || companyName.trim().length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Company Name is required.",
-      });
-      return;
+    if (selectedDocumentType === "fulfillment") {
+      if (!companyName?.trim()) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Company Name is required." });
+        return false;
+      }
+      if (!contact?.trim()) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Contact is required." });
+        return false;
+      }
+      if (!email?.trim()) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Email is required." });
+        return false;
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Please enter a valid email address." });
+        return false;
+      }
+      if (!clientLegalName?.trim()) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Client legal name (signature) is required." });
+        return false;
+      }
+      return true;
     }
-
-    if (!contact || contact.trim().length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Contact is required.",
-      });
-      return;
+    if (selectedDocumentType === "partnership") {
+      if (!partnerAgencyName?.trim()) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Partner / Agency Name is required." });
+        return false;
+      }
+      if (!address?.trim()) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Address is required." });
+        return false;
+      }
+      if (!email?.trim()) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Email is required." });
+        return false;
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Please enter a valid email address." });
+        return false;
+      }
+      if (!phone?.trim()) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Phone is required." });
+        return false;
+      }
+      if (!partnerAuthorizedName?.trim()) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Authorized name (signature) is required." });
+        return false;
+      }
+      return true;
     }
-
-    if (!email || email.trim().length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Email is required.",
-      });
-      return;
-    }
-
-    if (!clientLegalName || clientLegalName.trim().length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Client legal name (signature) is required.",
-      });
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Please enter a valid email address.",
-      });
-      return;
-    }
-
-    return true;
+    return false;
   };
 
   const handleNextFromDetails = () => {
@@ -136,29 +154,35 @@ export default function DocumentsPage() {
       return;
     }
 
-    // Revalidate in case user bypassed step
     if (!validateStepOne()) return;
 
     setIsSubmitting(true);
     try {
-      // Build the request data object
+      const documentTypeLabel =
+        selectedDocumentType === "partnership"
+          ? "B2B Partnership Agreement"
+          : "Fulfillment & Prep Services Agreement";
       const requestData: any = {
         userId: userProfile.uid,
-        documentType: "Fulfillment & Prep Services Agreement",
+        documentType: documentTypeLabel,
         status: "pending",
         requestedAt: Timestamp.now(),
-        companyName: companyName.trim(),
-        contact: contact.trim(),
-        email: email.trim(),
-        clientLegalName: clientLegalName.trim(),
-        // Service provider signature is always Prep Services FBA in this flow
-        serviceProviderName: "Prep Services FBA LLC",
       };
-
-      // Only include notes if it has a non-empty value
-      if (notes && notes.trim().length > 0) {
-        requestData.notes = notes.trim();
+      if (selectedDocumentType === "fulfillment") {
+        requestData.companyName = companyName.trim();
+        requestData.contact = contact.trim();
+        requestData.email = email.trim();
+        requestData.clientLegalName = clientLegalName.trim();
+        requestData.serviceProviderName = "Prep Services FBA LLC";
+      } else if (selectedDocumentType === "partnership") {
+        requestData.partnerAgencyName = partnerAgencyName.trim();
+        requestData.address = address.trim();
+        requestData.email = email.trim();
+        requestData.phone = phone.trim();
+        requestData.partnerAuthorizedName = partnerAuthorizedName.trim();
+        if (partnerTitle?.trim()) requestData.partnerTitle = partnerTitle.trim();
       }
+      if (notes?.trim()) requestData.notes = notes.trim();
 
       await addDoc(collection(db, `users/${userProfile.uid}/documentRequests`), requestData);
 
@@ -172,6 +196,12 @@ export default function DocumentsPage() {
       setContact("");
       setEmail("");
       setClientLegalName("");
+      setPartnerAgencyName("");
+      setAddress("");
+      setPhone("");
+      setPartnerAuthorizedName("");
+      setPartnerTitle("");
+      setSelectedDocumentType(null);
       setRequestStep(1);
       setRequestDialogOpen(false);
     } catch (error: any) {
@@ -244,6 +274,7 @@ export default function DocumentsPage() {
             setRequestDialogOpen(open);
             if (!open) {
               setRequestStep(1);
+              setSelectedDocumentType(null);
             }
           }}
         >
@@ -253,88 +284,127 @@ export default function DocumentsPage() {
               Request Document
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Fulfillment & Prep Services Agreement</DialogTitle>
+              <DialogTitle>
+                {selectedDocumentType == null
+                  ? "Select Document"
+                  : selectedDocumentType === "fulfillment"
+                    ? "Fulfillment & Prep Services Agreement"
+                    : "B2B Partnership Agreement"}
+              </DialogTitle>
               <DialogDescription>
-                Fill your company details and sign digitally. On the next step you can optionally add notes for the admin.
+                {selectedDocumentType == null
+                  ? "Choose the document you want to request. You will fill your details in the next step."
+                  : requestStep === 1
+                    ? "Fill your details below. These will appear on the agreement. Service provider will be shown as Prep Services FBA LLC."
+                    : "Add any notes for the admin (optional), then submit your request."}
               </DialogDescription>
             </DialogHeader>
-            {requestStep === 1 ? (
-              <div className="space-y-4 py-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-md border p-3 text-sm">
-                  <div className="space-y-1">
-                    <p className="font-semibold">Service Provider</p>
-                    <p className="text-muted-foreground">Prep Services FBA LLC</p>
-                    <p className="text-muted-foreground text-xs">Email: info@prepservicesfba.com</p>
-                    <p className="text-muted-foreground text-xs">Phone: +1 347 651 3010</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="font-semibold">Client</p>
-                    <p className="text-muted-foreground text-xs">
-                      Please fill your company details below. These will appear on the agreement.
-                    </p>
-                  </div>
+
+            {selectedDocumentType == null ? (
+              <div className="grid grid-cols-1 gap-3 py-4">
+                {DOCUMENT_TYPES.map((docType) => (
+                  <Button
+                    key={docType.id}
+                    type="button"
+                    variant="outline"
+                    className="h-auto flex flex-col items-start gap-1 p-4 text-left"
+                    onClick={() => {
+                      setSelectedDocumentType(docType.id);
+                      setRequestStep(1);
+                    }}
+                  >
+                    <span className="font-semibold">{docType.label}</span>
+                    <span className="text-xs text-muted-foreground font-normal">{docType.description}</span>
+                  </Button>
+                ))}
+              </div>
+            ) : requestStep === 1 ? (
+              <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+                {selectedDocumentType === "fulfillment" ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-md border p-3 text-sm">
+                      <div className="space-y-1">
+                        <p className="font-semibold">Service Provider</p>
+                        <p className="text-muted-foreground">Prep Services FBA LLC</p>
+                        <p className="text-muted-foreground text-xs">Email: info@prepservicesfba.com</p>
+                        <p className="text-muted-foreground text-xs">Phone: +1 347 661 3010</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-semibold">Client</p>
+                        <p className="text-muted-foreground text-xs">Fill your details below.</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="companyName">Company Name <span className="text-red-500">*</span></Label>
+                      <Input id="companyName" placeholder="Enter company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="contact">Contact <span className="text-red-500">*</span></Label>
+                      <Input id="contact" placeholder="Enter contact number" value={contact} onChange={(e) => setContact(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
+                      <Input id="email" type="email" placeholder="Enter email address" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="clientLegalName">Client Legal Name (signature) <span className="text-red-500">*</span></Label>
+                      <Input id="clientLegalName" placeholder="Type your full legal name" value={clientLegalName} onChange={(e) => setClientLegalName(e.target.value)} />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-md border p-3 text-sm">
+                      <div className="space-y-1">
+                        <p className="font-semibold">Service Provider</p>
+                        <p className="text-muted-foreground">Prep Services FBA LLC</p>
+                        <p className="text-muted-foreground text-xs">7000 Atrium Way B05, Mount Laurel, NJ 08054</p>
+                        <p className="text-muted-foreground text-xs">info@prepservicesfba.com | +1 347 661 3010</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-semibold">Partner</p>
+                        <p className="text-muted-foreground text-xs">Fill your partner/agency details below.</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="partnerAgencyName">Partner / Agency Name <span className="text-red-500">*</span></Label>
+                      <Input id="partnerAgencyName" placeholder="Enter partner or agency name" value={partnerAgencyName} onChange={(e) => setPartnerAgencyName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Address <span className="text-red-500">*</span></Label>
+                      <Input id="address" placeholder="Full address" value={address} onChange={(e) => setAddress(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
+                        <Input id="email" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Phone <span className="text-red-500">*</span></Label>
+                        <Input id="phone" placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="partnerAuthorizedName">Authorized Name (signature) <span className="text-red-500">*</span></Label>
+                      <Input id="partnerAuthorizedName" placeholder="Full legal name for signature" value={partnerAuthorizedName} onChange={(e) => setPartnerAuthorizedName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="partnerTitle">Title (optional)</Label>
+                      <Input id="partnerTitle" placeholder="e.g. Founder, CEO" value={partnerTitle} onChange={(e) => setPartnerTitle(e.target.value)} />
+                    </div>
+                  </>
+                )}
+                <div className="flex gap-3">
+                  {selectedDocumentType != null && (
+                    <Button type="button" variant="outline" onClick={() => setSelectedDocumentType(null)}>
+                      Back
+                    </Button>
+                  )}
+                  <Button onClick={handleNextFromDetails} className="flex-1">
+                    Next
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="companyName">
-                    Company Name <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="companyName"
-                    placeholder="Enter company name"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contact">
-                    Contact <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="contact"
-                    placeholder="Enter contact number"
-                    value={contact}
-                    onChange={(e) => setContact(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">
-                    Email <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Enter email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="clientLegalName">
-                    Client Legal Name (signature) <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="clientLegalName"
-                    placeholder="Type your full legal name"
-                    value={clientLegalName}
-                    onChange={(e) => setClientLegalName(e.target.value)}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    This will appear on the agreement as the client signature. Service provider will be shown as{" "}
-                    <span className="font-medium">Prep Services FBA LLC</span>.
-                  </p>
-                </div>
-                <Button
-                  onClick={handleNextFromDetails}
-                  className="w-full"
-                >
-                  Next
-                </Button>
               </div>
             ) : (
               <div className="space-y-4 py-4">

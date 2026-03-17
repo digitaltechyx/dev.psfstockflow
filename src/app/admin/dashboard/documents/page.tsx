@@ -14,6 +14,7 @@ import { FileText, Upload, Loader2, CheckCircle, Clock, Download, User, Search, 
 import { format, subDays } from "date-fns";
 import { generateMSAPDF } from "@/lib/msa-pdf-generator";
 import { generateFulfillmentAgreementPDF } from "@/lib/fulfillment-agreement-pdf-generator";
+import { generatePartnershipAgreementPDF } from "@/lib/partnership-agreement-pdf-generator";
 import type { UserProfile } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -52,8 +53,12 @@ interface DocumentRequest {
   userEmail?: string;
   userName?: string;
   clientLegalName?: string;
-  /** How the request was fulfilled: approved from template vs uploaded file. */
   decisionType?: "approved" | "uploaded";
+  partnerAgencyName?: string;
+  address?: string;
+  phone?: string;
+  partnerAuthorizedName?: string;
+  partnerTitle?: string;
 }
 
 export default function DocumentRequestsPage() {
@@ -183,16 +188,34 @@ export default function DocumentRequestsPage() {
       const completedAt = Timestamp.now();
       const completedAtStr = format(completedAt.toDate(), "MMM d, yyyy");
 
-      // Always generate a standard Fulfillment & Prep Services Agreement PDF on approve.
-      const blob = await generateFulfillmentAgreementPDF({
-        companyName: request.companyName || "(Company)",
-        contact: request.contact || "",
-        email: request.email || "",
-        clientLegalName: request.clientLegalName || request.userName || "Client",
-        completedAt: completedAtStr,
-      });
-      const safeCompany = (request.companyName || "Client").replace(/\s+/g, "-");
-      const fileName = `Fulfillment-Prep-Services-Agreement-${safeCompany}.pdf`;
+      const isPartnership = request.documentType === "B2B Partnership Agreement";
+      let blob: Blob;
+      let fileName: string;
+
+      if (isPartnership) {
+        blob = await generatePartnershipAgreementPDF({
+          partnerAgencyName: request.partnerAgencyName || "[Partner / Agency Name]",
+          address: request.address || "",
+          email: request.email || "",
+          phone: request.phone || "",
+          partnerAuthorizedName: request.partnerAuthorizedName || request.userName || "Partner",
+          partnerTitle: request.partnerTitle,
+          completedAt: completedAtStr,
+        });
+        const safeName = (request.partnerAgencyName || "Partner").replace(/\s+/g, "-");
+        fileName = `B2B-Partnership-Agreement-${safeName}.pdf`;
+      } else {
+        blob = await generateFulfillmentAgreementPDF({
+          companyName: request.companyName || "(Company)",
+          contact: request.contact || "",
+          email: request.email || "",
+          clientLegalName: request.clientLegalName || request.userName || "Client",
+          completedAt: completedAtStr,
+        });
+        const safeCompany = (request.companyName || "Client").replace(/\s+/g, "-");
+        fileName = `Fulfillment-Prep-Services-Agreement-${safeCompany}.pdf`;
+      }
+
       const storagePath = `documentRequests/${request.userId}/${request.id}/${Date.now()}_${fileName}`;
       const storageRef = ref(storage, storagePath);
       await uploadBytes(storageRef, blob);
@@ -648,6 +671,22 @@ export default function DocumentRequestsPage() {
                             <p className="text-sm text-muted-foreground mt-1">
                               Client signature: {request.clientLegalName}
                             </p>
+                          )}
+                          {request.documentType === "B2B Partnership Agreement" && (
+                            <>
+                              {request.partnerAgencyName && (
+                                <p className="text-sm text-muted-foreground mt-1">Partner: {request.partnerAgencyName}</p>
+                              )}
+                              {request.address && (
+                                <p className="text-sm text-muted-foreground mt-1">Address: {request.address}</p>
+                              )}
+                              {request.phone && (
+                                <p className="text-sm text-muted-foreground mt-1">Phone: {request.phone}</p>
+                              )}
+                              {request.partnerAuthorizedName && (
+                                <p className="text-sm text-muted-foreground mt-1">Authorized: {request.partnerAuthorizedName}</p>
+                              )}
+                            </>
                           )}
                           <p className="text-sm text-muted-foreground mt-1">
                             Requested {format(new Date(request.requestedAt?.seconds * 1000 || Date.now()), "MMM d, yyyy 'at' h:mm a")}
