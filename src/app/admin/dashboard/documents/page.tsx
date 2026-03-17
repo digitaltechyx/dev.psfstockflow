@@ -183,46 +183,31 @@ export default function DocumentRequestsPage() {
       const completedAt = Timestamp.now();
       const completedAtStr = format(completedAt.toDate(), "MMM d, yyyy");
 
-      const isFulfillmentAgreement =
-        request.documentType === "Fulfillment & Prep Services Agreement" &&
-        request.companyName &&
-        request.clientLegalName;
-
-      if (isFulfillmentAgreement) {
-        const blob = await generateFulfillmentAgreementPDF({
-          companyName: request.companyName,
-          contact: request.contact || "",
-          email: request.email || "",
-          clientLegalName: request.clientLegalName,
-          completedAt: completedAtStr,
-        });
-        const fileName = `Fulfillment-Prep-Services-Agreement-${request.companyName.replace(/\s+/g, "-")}.pdf`;
-        const storagePath = `documentRequests/${request.userId}/${request.id}/${Date.now()}_${fileName}`;
-        const storageRef = ref(storage, storagePath);
-        await uploadBytes(storageRef, blob);
-        const downloadURL = await getDownloadURL(storageRef);
-        await updateDoc(requestRef, {
-          status: "complete",
-          completedAt,
-          decisionType: "approved",
-          documentUrl: downloadURL,
-          fileName,
-        });
-        toast({
-          title: "Request Approved",
-          description: "Agreement PDF generated and the user can now view and download it.",
-        });
-      } else {
-        await updateDoc(requestRef, {
-          status: "complete",
-          completedAt,
-          decisionType: "approved",
-        });
-        toast({
-          title: "Request Approved",
-          description: "The document request has been approved.",
-        });
-      }
+      // Always generate a standard Fulfillment & Prep Services Agreement PDF on approve.
+      const blob = await generateFulfillmentAgreementPDF({
+        companyName: request.companyName || "(Company)",
+        contact: request.contact || "",
+        email: request.email || "",
+        clientLegalName: request.clientLegalName || request.userName || "Client",
+        completedAt: completedAtStr,
+      });
+      const safeCompany = (request.companyName || "Client").replace(/\s+/g, "-");
+      const fileName = `Fulfillment-Prep-Services-Agreement-${safeCompany}.pdf`;
+      const storagePath = `documentRequests/${request.userId}/${request.id}/${Date.now()}_${fileName}`;
+      const storageRef = ref(storage, storagePath);
+      await uploadBytes(storageRef, blob);
+      const downloadURL = await getDownloadURL(storageRef);
+      await updateDoc(requestRef, {
+        status: "complete",
+        completedAt,
+        decisionType: "approved",
+        documentUrl: downloadURL,
+        fileName,
+      });
+      toast({
+        title: "Request Approved",
+        description: "Agreement PDF generated and the user can now view and download it.",
+      });
     } catch (error: any) {
       console.error("Error approving document request:", error);
       toast({
