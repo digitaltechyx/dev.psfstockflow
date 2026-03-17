@@ -26,6 +26,7 @@ import { InventoryRequestsManagement } from "@/components/admin/inventory-reques
 import { ProductReturnsManagement } from "@/components/admin/product-returns-management";
 import { DisposeRequestsManagement } from "@/components/admin/dispose-requests-management";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
 import type { InventoryItem, ShippedItem, UserProfile, RestockHistory, RecycledShippedItem, RecycledRestockHistory, RecycledInventoryItem, DeleteLog, EditLog } from "@/types";
 import { arrayToCSV, downloadCSV, formatDateForCSV, type InventoryCSVRow, type ShippedCSVRow } from "@/lib/csv-utils";
@@ -249,7 +250,7 @@ export function AdminInventoryManagement({
   const [recyclePage, setRecyclePage] = useState(1);
   const itemsPerPage = 10;
   const inventoryItemsPerPage = 12; // 3 cards per row Ãƒâ€” 4 rows = 12 items per page for current inventory card view
-  const shippedItemsPerPage = 12; // 3 cards per row Ãƒâ€” 4 rows = 12 items per page for shipped inventory card view
+  const shippedItemsPerPage = 20; // compact list view Ãƒâ€” 4 rows = 12 items per page for shipped inventory card view
 
   // Invoice range selection for generating invoice over specific dates
   const [invoiceFromDate, setInvoiceFromDate] = useState<Date | undefined>();
@@ -2020,188 +2021,109 @@ export function AdminInventoryManagement({
             </div>
             
             {filteredShipped.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {paginatedShipped.map((item) => (
-                  <Card key={item.id} className="hover:shadow-md transition-shadow flex flex-col h-full">
-                    <CardContent className="p-4 flex flex-col flex-1">
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <h3 className="font-semibold text-base leading-tight flex-1 min-w-0">{item.productName}</h3>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm" className="shrink-0">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Shipped Order</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete this shipped order for "{item.productName}"?
-                                This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeleteShippedOrder(item)}
-                                className="bg-red-600 hover:bg-red-700"
+              <div className="rounded-md border overflow-x-auto">
+                <Table className="min-w-[900px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[140px]">Product</TableHead>
+                      <TableHead className="min-w-[140px]">Service</TableHead>
+                      <TableHead className="min-w-[120px]">Type</TableHead>
+                      <TableHead className="text-right w-20">Shipped</TableHead>
+                      <TableHead className="text-right w-20">Remaining</TableHead>
+                      <TableHead className="text-right w-16">Pack</TableHead>
+                      <TableHead className="whitespace-nowrap">Date</TableHead>
+                      <TableHead className="min-w-[120px]">Remarks</TableHead>
+                      <TableHead className="w-10">Add’l</TableHead>
+                      <TableHead className="w-12 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedShipped.map((item) => {
+                      const svc = (item as any).service as string | undefined;
+                      const shipmentType = (item as any).shipmentType as string | undefined;
+                      const productType = (item as any).productType as string | undefined;
+                      const palletSubType = (item as any).palletSubType as string | undefined;
+                      const itemsCount = Array.isArray((item as any).items) ? (item as any).items.length : 0;
+                      const add = (item as any).additionalServices as any | undefined;
+                      const hasAdd = !!add && ((add.bubbleWrapFeet || 0) > 0 || (add.stickerRemovalItems || 0) > 0 || (add.warningLabels || 0) > 0 || (add.total || 0) > 0);
+                      const typeLabel = shipmentType === "pallet" && palletSubType ? `Pallet (${palletSubType})` : shipmentType ?? undefined;
+                      const typeProductText = [typeLabel, productType].filter(Boolean).join(" • ") || "—";
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">
+                            <span className="truncate block max-w-[180px]" title={item.productName}>{item.productName}</span>
+                            {itemsCount > 1 && <span className="text-xs text-muted-foreground">({itemsCount} items)</span>}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            <span className="truncate block max-w-[160px]" title={svc}>{svc || "—"}</span>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            <span className="truncate block max-w-[140px]">{typeProductText}</span>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">{(item as any).boxesShipped ?? item.shippedQty}</TableCell>
+                          <TableCell className="text-right">{item.remainingQty}</TableCell>
+                          <TableCell className="text-right">{item.packOf}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{formatDate(item.date)}</TableCell>
+                          <TableCell className="min-w-[120px]">
+                            {item.remarks ? (
+                              <Button variant="ghost" size="sm" className="h-auto p-1 text-xs text-left justify-start max-w-full truncate" onClick={() => handleRemarksClick(item.remarks || "")}>
+                                <span className="truncate block">{item.remarks}</span>
+                                <Eye className="h-3 w-3 ml-1 shrink-0" />
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {hasAdd ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => {
+                                  const lines: string[] = [];
+                                  if ((add?.bubbleWrapFeet || 0) > 0) lines.push(`Bubble Wrap: ${add.bubbleWrapFeet} feet` + (add?.pricePerFoot ? ` (x $${Number(add.pricePerFoot).toFixed(2)})` : ""));
+                                  if ((add?.stickerRemovalItems || 0) > 0) lines.push(`Sticker Removal: ${add.stickerRemovalItems} items` + (add?.pricePerItem ? ` (x $${Number(add.pricePerItem).toFixed(2)})` : ""));
+                                  if ((add?.warningLabels || 0) > 0) lines.push(`Warning Labels: ${add.warningLabels}` + (add?.pricePerLabel ? ` (x $${Number(add.pricePerLabel).toFixed(2)})` : ""));
+                                  if ((add?.total || 0) > 0) lines.push(`Total Additional: $${Number(add.total || 0).toFixed(2)}`);
+                                  if (lines.length === 0) lines.push("No additional services.");
+                                  handleDetailsClick("Additional Services", lines);
+                                }}
                               >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                      <div className="space-y-2 mb-4 flex-1">
-                        {(() => {
-                          const svc = (item as any).service as string | undefined;
-                          const shipmentType = (item as any).shipmentType as string | undefined;
-                          const productType = (item as any).productType as string | undefined;
-                          const palletSubType = (item as any).palletSubType as string | undefined;
-                          const itemsCount = Array.isArray((item as any).items) ? (item as any).items.length : 0;
-                          const add = (item as any).additionalServices as any | undefined;
-                          const hasAdd =
-                            !!add &&
-                            ((add.bubbleWrapFeet || 0) > 0 ||
-                              (add.stickerRemovalItems || 0) > 0 ||
-                              (add.warningLabels || 0) > 0 ||
-                              (add.total || 0) > 0);
-
-                          if (!svc && !shipmentType && !productType && !palletSubType && !itemsCount && !hasAdd) return null;
-
-                          const typeLabel =
-                            shipmentType === "pallet" && palletSubType
-                              ? `Pallet (${palletSubType})`
-                              : shipmentType
-                                ? shipmentType
-                                : undefined;
-
-                          const addParts = [
-                            (add?.bubbleWrapFeet || 0) > 0 ? `Bubble Wrap: ${add.bubbleWrapFeet}` : null,
-                            (add?.stickerRemovalItems || 0) > 0 ? `Sticker Removal: ${add.stickerRemovalItems}` : null,
-                            (add?.warningLabels || 0) > 0 ? `Warning Labels: ${add.warningLabels}` : null,
-                          ].filter(Boolean) as string[];
-
-                          return (
-                            <>
-                              {svc && (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <List className="h-4 w-4 shrink-0" />
-                                  <span className="truncate" title={svc}>Service: {svc}</span>
-                                </div>
-                              )}
-                              {(typeLabel || productType) && (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <Package className="h-4 w-4 shrink-0" />
-                                  <span className="truncate">
-                                    {typeLabel ? `Type: ${typeLabel}` : ""}
-                                    {typeLabel && productType ? " • " : ""}
-                                    {productType ? `Product: ${productType}` : ""}
-                                  </span>
-                                </div>
-                              )}
-                              {itemsCount > 1 && (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <FileText className="h-4 w-4 shrink-0" />
-                                  <span>Items: <span className="font-semibold text-foreground">{itemsCount}</span></span>
-                                </div>
-                              )}
-                              {hasAdd && (
-                                <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                                  <FileText className="h-4 w-4 shrink-0 mt-0.5" />
-                                  <div className="min-w-0 w-full">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <span className="font-medium text-foreground/90">Additional Services</span>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 px-2 text-xs shrink-0"
-                                        onClick={() => {
-                                          const lines: string[] = [];
-                                          if ((add?.bubbleWrapFeet || 0) > 0) {
-                                            lines.push(
-                                              `Bubble Wrap: ${add.bubbleWrapFeet} feet` +
-                                                (add?.pricePerFoot ? ` (x $${Number(add.pricePerFoot).toFixed(2)})` : "")
-                                            );
-                                          }
-                                          if ((add?.stickerRemovalItems || 0) > 0) {
-                                            lines.push(
-                                              `Sticker Removal: ${add.stickerRemovalItems} items` +
-                                                (add?.pricePerItem ? ` (x $${Number(add.pricePerItem).toFixed(2)})` : "")
-                                            );
-                                          }
-                                          if ((add?.warningLabels || 0) > 0) {
-                                            lines.push(
-                                              `Warning Labels: ${add.warningLabels}` +
-                                                (add?.pricePerLabel ? ` (x $${Number(add.pricePerLabel).toFixed(2)})` : "")
-                                            );
-                                          }
-                                          if ((add?.total || 0) > 0) {
-                                            lines.push(`Total Additional: $${Number(add.total || 0).toFixed(2)}`);
-                                          }
-                                          if (lines.length === 0) lines.push("No additional services.");
-                                          handleDetailsClick("Additional Services", lines);
-                                        }}
-                                      >
-                                        <Eye className="h-3 w-3 mr-1" />
-                                        View
-                                      </Button>
-                                    </div>
-                                    {addParts.length > 0 ? (
-                                      <ul className="mt-1 ml-4 list-disc text-xs text-muted-foreground space-y-0.5">
-                                        {addParts.map((p) => (
-                                          <li key={p} className="break-words overflow-wrap-anywhere">{p}</li>
-                                        ))}
-                                      </ul>
-                                    ) : (
-                                      <div className="text-xs text-muted-foreground mt-1">—</div>
-                                    )}
-                                    {(add?.total || 0) > 0 && (
-                                      <div className="text-xs mt-1">
-                                        Total Additional:{" "}
-                                        <span className="font-semibold text-foreground">${Number(add.total || 0).toFixed(2)}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Truck className="h-4 w-4 shrink-0" />
-                          <span>Shipped: <span className="font-semibold text-foreground">{(item as any).boxesShipped ?? item.shippedQty}</span></span>
-                    </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Package className="h-4 w-4 shrink-0" />
-                          <span>Remaining: <span className="font-semibold text-foreground">{item.remainingQty}</span></span>
-                  </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Package className="h-4 w-4 shrink-0" />
-                          <span>Pack: <span className="font-semibold text-foreground">{item.packOf}</span></span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Calendar className="h-4 w-4 shrink-0" />
-                          <span className="truncate">Date: {formatDate(item.date)}</span>
-                        </div>
-                        {item.remarks && (
-                          <div className="mt-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-auto p-0 text-left justify-start text-xs text-muted-foreground w-full"
-                              onClick={() => handleRemarksClick(item.remarks || "")}
-                            >
-                              <span className="truncate">Remarks: {item.remarks}</span>
-                              <Eye className="h-3 w-3 ml-1 flex-shrink-0" />
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm" className="h-8 w-8 p-0">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Shipped Order</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this shipped order for "{item.productName}"? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteShippedOrder(item)} className="bg-red-600 hover:bg-red-700">
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             ) : (
               <div className="text-center py-8">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { InventoryItem, ShippedItem, ShipmentRequest } from "@/types";
+import type { InventoryItem, ShippedItem, ShipmentRequest, RestockHistory } from "@/types";
 import { getShipmentSummary } from "@/lib/shipment-utils";
 import {
   Card,
@@ -27,6 +27,7 @@ import { format } from "date-fns";
 import { useCollection } from "@/hooks/use-collection";
 import { useAuth } from "@/hooks/use-auth";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 function formatDate(date: ShippedItem["date"]) {
     if (typeof date === 'string') {
@@ -37,6 +38,16 @@ function formatDate(date: ShippedItem["date"]) {
     }
     return "N/A";
   }
+
+function formatRestockDate(restockedAt: RestockHistory["restockedAt"]) {
+  if (typeof restockedAt === "string") {
+    return format(new Date(restockedAt), "d MMM yyyy");
+  }
+  if (restockedAt && typeof restockedAt === "object" && "seconds" in restockedAt) {
+    return format(new Date(restockedAt.seconds * 1000), "d MMM yyyy");
+  }
+  return "N/A";
+}
 
 export function ShippedTable({ data, inventory }: { data: ShippedItem[], inventory: InventoryItem[] }) {
   const { userProfile } = useAuth();
@@ -57,6 +68,42 @@ export function ShippedTable({ data, inventory }: { data: ShippedItem[], invento
   const { data: pendingShipmentRequests } = useCollection<ShipmentRequest>(
     userProfile ? `users/${userProfile.uid}/shipmentRequests` : ""
   );
+
+  const { data: restockHistory } = useCollection<RestockHistory>(
+    userProfile ? `users/${userProfile.uid}/restockHistory` : ""
+  );
+
+  // Latest restock per product (by productName) for "Last restocked" column
+  const latestRestockByProduct = useMemo(() => {
+    const map = new Map<
+      string,
+      { restockedAt: RestockHistory["restockedAt"]; restockedQuantity: number; restockedBy: string }
+    >();
+    for (const r of restockHistory) {
+      const at =
+        typeof r.restockedAt === "string"
+          ? new Date(r.restockedAt).getTime()
+          : r.restockedAt?.seconds != null
+            ? r.restockedAt.seconds * 1000
+            : 0;
+      const existing = map.get(r.productName);
+      const existingAt = existing
+        ? typeof existing.restockedAt === "string"
+          ? new Date(existing.restockedAt).getTime()
+          : existing.restockedAt?.seconds != null
+            ? existing.restockedAt.seconds * 1000
+            : 0
+        : 0;
+      if (at > existingAt) {
+        map.set(r.productName, {
+          restockedAt: r.restockedAt,
+          restockedQuantity: r.restockedQuantity,
+          restockedBy: r.restockedBy,
+        });
+      }
+    }
+    return map;
+  }, [restockHistory]);
 
   const pendingCount = pendingShipmentRequests.filter(req => req.status === "pending").length;
   const rejectedCount = pendingShipmentRequests.filter(req => req.status?.toLowerCase() === "rejected").length;
@@ -219,6 +266,7 @@ export function ShippedTable({ data, inventory }: { data: ShippedItem[], invento
   }, [searchTerm, dateFilter]);
 
   return (
+    <TooltipProvider>
     <Card className="w-full">
       <CardHeader className="pb-2 sm:pb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -341,6 +389,26 @@ export function ShippedTable({ data, inventory }: { data: ShippedItem[], invento
                     </Button>
                   </div>
                 )}
+                {(() => {
+                  const latest = latestRestockByProduct.get(item.productName);
+                  if (!latest) return null;
+                  const text = `${formatRestockDate(latest.restockedAt)} (+${latest.restockedQuantity})`;
+                  return (
+                    <div className="mt-2">
+                      <div className="text-xs text-muted-foreground">Last restocked</div>
+                      {latest.restockedBy ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-xs cursor-default">{text}</span>
+                          </TooltipTrigger>
+                          <TooltipContent>Restocked by {latest.restockedBy}</TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-xs">{text}</span>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="mt-2">
                   <div className="text-xs text-muted-foreground">Status</div>
                   {(item as any).status === "Pending" ? (
@@ -380,6 +448,7 @@ export function ShippedTable({ data, inventory }: { data: ShippedItem[], invento
                   <TableHead className="text-xs sm:text-sm hidden md:table-cell">Ship To</TableHead>
                   <TableHead className="text-xs sm:text-sm hidden lg:table-cell">Remarks</TableHead>
                   <TableHead className="text-xs sm:text-sm hidden lg:table-cell">Additional Services</TableHead>
+                  <TableHead className="text-xs sm:text-sm hidden md:table-cell">Last restocked</TableHead>
                   <TableHead className="text-xs sm:text-sm">Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -540,6 +609,23 @@ export function ShippedTable({ data, inventory }: { data: ShippedItem[], invento
                           );
                         })()}
                       </TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">
+                        {(() => {
+                          const latest = latestRestockByProduct.get(item.productName);
+                          if (!latest) return <span>—</span>;
+                          const text = `${formatRestockDate(latest.restockedAt)} (+${latest.restockedQuantity})`;
+                          return latest.restockedBy ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-default">{text}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>Restocked by {latest.restockedBy}</TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <span>{text}</span>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell>
                         {(item as any).status === "Pending" ? (
                           <Badge variant="outline" className="flex items-center gap-1 w-fit">
@@ -559,7 +645,7 @@ export function ShippedTable({ data, inventory }: { data: ShippedItem[], invento
               ))
             ) : (
               <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8">
+                    <TableCell colSpan={11} className="text-center py-8">
                       <div className="text-xs sm:text-sm text-gray-500">
                         {combinedData.length === 0 ? "No shipped orders or pending requests found." : "No orders match your search criteria."}
                       </div>
@@ -737,6 +823,7 @@ export function ShippedTable({ data, inventory }: { data: ShippedItem[], invento
         </DialogContent>
       </Dialog>
     </Card>
+    </TooltipProvider>
   );
 }
 
