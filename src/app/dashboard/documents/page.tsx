@@ -8,7 +8,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCollection } from "@/hooks/use-collection";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { FileText, Download, Upload, Loader2, CheckCircle, Clock, FileSignature, Eye } from "lucide-react";
+import { FileText, Download, Upload, Loader2, CheckCircle, Clock, FileSignature, Eye, Building2, User, MapPin, Mail, Phone } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { FULFILLMENT_SERVICE_PROVIDER, FULFILLMENT_AGREEMENT_SECTIONS } from "@/lib/fulfillment-agreement-content";
+import { PARTNERSHIP_SERVICE_PROVIDER, PARTNERSHIP_AGREEMENT_SECTIONS } from "@/lib/partnership-agreement-content";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { generateMSAPDF } from "@/lib/msa-pdf-generator";
@@ -284,7 +288,7 @@ export default function DocumentsPage() {
               Request Document
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent className={cn("max-w-lg", selectedDocumentType != null && requestStep === 1 && "max-w-3xl max-h-[90vh] flex flex-col")}>
             <DialogHeader>
               <DialogTitle>
                 {selectedDocumentType == null
@@ -295,9 +299,9 @@ export default function DocumentsPage() {
               </DialogTitle>
               <DialogDescription>
                 {selectedDocumentType == null
-                  ? "Choose the document you want to request. You will fill your details in the next step."
+                  ? "Choose the document you want to request. You will see the full document and fill your details in the template."
                   : requestStep === 1
-                    ? "Fill your details below. These will appear on the agreement. Service provider will be shown as Prep Services FBA LLC."
+                    ? "Read the full agreement below and fill your details in the template. Service provider will be shown as Prep Services FBA LLC."
                     : "Add any notes for the admin (optional), then submit your request."}
               </DialogDescription>
             </DialogHeader>
@@ -321,86 +325,137 @@ export default function DocumentsPage() {
                 ))}
               </div>
             ) : requestStep === 1 ? (
-              <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-                {selectedDocumentType === "fulfillment" ? (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-md border p-3 text-sm">
-                      <div className="space-y-1">
-                        <p className="font-semibold">Service Provider</p>
-                        <p className="text-muted-foreground">Prep Services FBA LLC</p>
-                        <p className="text-muted-foreground text-xs">Email: info@prepservicesfba.com</p>
-                        <p className="text-muted-foreground text-xs">Phone: +1 347 661 3010</p>
+              <div className="flex flex-col gap-4 py-2 min-h-0 overflow-hidden">
+                <p className="text-sm text-muted-foreground">
+                  This agreement is entered into as of <span className="font-medium text-foreground">{format(new Date(), "MMMM d, yyyy")}</span>, by and between:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
                       </div>
-                      <div className="space-y-1">
-                        <p className="font-semibold">Client</p>
-                        <p className="text-muted-foreground text-xs">Fill your details below.</p>
+                      <Label className="text-sm font-semibold text-muted-foreground">Service Provider</Label>
+                    </div>
+                    <div className="rounded-xl border bg-muted/20 p-4 space-y-1.5 text-sm">
+                      {selectedDocumentType === "fulfillment" ? (
+                        <>
+                          <p className="font-semibold text-foreground">{FULFILLMENT_SERVICE_PROVIDER.name}</p>
+                          <p className="flex items-center gap-2 text-muted-foreground">
+                            <Mail className="h-4 w-4 shrink-0" />
+                            {FULFILLMENT_SERVICE_PROVIDER.contact}
+                          </p>
+                          <p className="flex items-center gap-2 text-muted-foreground">
+                            <Phone className="h-4 w-4 shrink-0" />
+                            {FULFILLMENT_SERVICE_PROVIDER.phone}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-semibold text-foreground">{PARTNERSHIP_SERVICE_PROVIDER.name}</p>
+                          <p className="flex items-start gap-2 text-muted-foreground">
+                            <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
+                            <span>{PARTNERSHIP_SERVICE_PROVIDER.address}</span>
+                          </p>
+                          <p className="flex items-center gap-2 text-muted-foreground">
+                            <Mail className="h-4 w-4 shrink-0" />
+                            {PARTNERSHIP_SERVICE_PROVIDER.email}
+                          </p>
+                          <p className="flex items-center gap-2 text-muted-foreground">
+                            <Phone className="h-4 w-4 shrink-0" />
+                            {PARTNERSHIP_SERVICE_PROVIDER.phone}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <User className="h-4 w-4" />
                       </div>
+                      <Label className="text-sm font-semibold text-muted-foreground">
+                        {selectedDocumentType === "fulfillment" ? "Client (your details)" : "Partner (your details)"}
+                      </Label>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="companyName">Company Name <span className="text-red-500">*</span></Label>
-                      <Input id="companyName" placeholder="Enter company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+                    <div className="rounded-xl border-2 border-dashed border-muted-foreground/20 bg-background p-4 space-y-3">
+                      {selectedDocumentType === "fulfillment" ? (
+                        <>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="companyName" className="text-xs font-medium">Company Name <span className="text-red-500">*</span></Label>
+                            <Input id="companyName" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Your company name" className="h-9" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="contact" className="text-xs font-medium">Contact <span className="text-red-500">*</span></Label>
+                            <Input id="contact" value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Contact number" className="h-9" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="email" className="text-xs font-medium">Email <span className="text-red-500">*</span></Label>
+                            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="h-9" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="clientLegalName" className="text-xs font-medium">Legal Name (signature) <span className="text-red-500">*</span></Label>
+                            <Input id="clientLegalName" value={clientLegalName} onChange={(e) => setClientLegalName(e.target.value)} placeholder="Full legal name" className="h-9" />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="partnerAgencyName" className="text-xs font-medium">Partner / Agency Name <span className="text-red-500">*</span></Label>
+                            <Input id="partnerAgencyName" value={partnerAgencyName} onChange={(e) => setPartnerAgencyName(e.target.value)} placeholder="Partner or agency name" className="h-9" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="address" className="text-xs font-medium">Address <span className="text-red-500">*</span></Label>
+                            <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full address" className="h-9" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="email" className="text-xs font-medium">Email <span className="text-red-500">*</span></Label>
+                              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="h-9" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="phone" className="text-xs font-medium">Phone <span className="text-red-500">*</span></Label>
+                              <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" className="h-9" />
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="partnerAuthorizedName" className="text-xs font-medium">Authorized Name (signature) <span className="text-red-500">*</span></Label>
+                            <Input id="partnerAuthorizedName" value={partnerAuthorizedName} onChange={(e) => setPartnerAuthorizedName(e.target.value)} placeholder="Full legal name" className="h-9" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="partnerTitle" className="text-xs font-medium">Title (optional)</Label>
+                            <Input id="partnerTitle" value={partnerTitle} onChange={(e) => setPartnerTitle(e.target.value)} placeholder="e.g. Founder, CEO" className="h-9" />
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="contact">Contact <span className="text-red-500">*</span></Label>
-                      <Input id="contact" placeholder="Enter contact number" value={contact} onChange={(e) => setContact(e.target.value)} />
+                  </div>
+                </div>
+                <div className="rounded-xl border bg-muted/20 overflow-hidden">
+                  <div className="border-b bg-muted/30 px-4 py-2">
+                    <p className="text-sm font-semibold">Agreement terms</p>
+                    <p className="text-xs text-muted-foreground">Please read the full agreement below.</p>
+                  </div>
+                  <ScrollArea className="h-[280px] w-full px-4 py-4">
+                    <div className="space-y-4 pr-4">
+                      {(selectedDocumentType === "fulfillment" ? FULFILLMENT_AGREEMENT_SECTIONS : PARTNERSHIP_AGREEMENT_SECTIONS).map((section, i) => (
+                        <div key={section.title} className={cn(i > 0 && "pt-4 border-t border-border/60")}>
+                          <h3 className="font-semibold text-foreground text-sm uppercase tracking-wide mb-1.5">
+                            {section.title}
+                          </h3>
+                          <p className="text-muted-foreground text-sm leading-relaxed">{section.body}</p>
+                        </div>
+                      ))}
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
-                      <Input id="email" type="email" placeholder="Enter email address" value={email} onChange={(e) => setEmail(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="clientLegalName">Client Legal Name (signature) <span className="text-red-500">*</span></Label>
-                      <Input id="clientLegalName" placeholder="Type your full legal name" value={clientLegalName} onChange={(e) => setClientLegalName(e.target.value)} />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-md border p-3 text-sm">
-                      <div className="space-y-1">
-                        <p className="font-semibold">Service Provider</p>
-                        <p className="text-muted-foreground">Prep Services FBA LLC</p>
-                        <p className="text-muted-foreground text-xs">7000 Atrium Way B05, Mount Laurel, NJ 08054</p>
-                        <p className="text-muted-foreground text-xs">info@prepservicesfba.com | +1 347 661 3010</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="font-semibold">Partner</p>
-                        <p className="text-muted-foreground text-xs">Fill your partner/agency details below.</p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="partnerAgencyName">Partner / Agency Name <span className="text-red-500">*</span></Label>
-                      <Input id="partnerAgencyName" placeholder="Enter partner or agency name" value={partnerAgencyName} onChange={(e) => setPartnerAgencyName(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="address">Address <span className="text-red-500">*</span></Label>
-                      <Input id="address" placeholder="Full address" value={address} onChange={(e) => setAddress(e.target.value)} />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
-                        <Input id="email" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="phone">Phone <span className="text-red-500">*</span></Label>
-                        <Input id="phone" placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="partnerAuthorizedName">Authorized Name (signature) <span className="text-red-500">*</span></Label>
-                      <Input id="partnerAuthorizedName" placeholder="Full legal name for signature" value={partnerAuthorizedName} onChange={(e) => setPartnerAuthorizedName(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="partnerTitle">Title (optional)</Label>
-                      <Input id="partnerTitle" placeholder="e.g. Founder, CEO" value={partnerTitle} onChange={(e) => setPartnerTitle(e.target.value)} />
-                    </div>
-                  </>
-                )}
-                <div className="flex gap-3">
-                  {selectedDocumentType != null && (
-                    <Button type="button" variant="outline" onClick={() => setSelectedDocumentType(null)}>
-                      Back
-                    </Button>
-                  )}
+                  </ScrollArea>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Agreed and Accepted by: Service Provider — Prep Services FBA LLC. {selectedDocumentType === "fulfillment" ? "Client" : "Partner"} — your name above will appear as signature.
+                </p>
+                <div className="flex gap-3 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setSelectedDocumentType(null)}>
+                    Back
+                  </Button>
                   <Button onClick={handleNextFromDetails} className="flex-1">
                     Next
                   </Button>
