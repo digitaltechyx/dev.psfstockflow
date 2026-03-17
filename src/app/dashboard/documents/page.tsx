@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCollection } from "@/hooks/use-collection";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { FileText, Download, Upload, Loader2, CheckCircle, Clock, FileSignature } from "lucide-react";
+import { FileText, Download, Upload, Loader2, CheckCircle, Clock, FileSignature, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { generateMSAPDF } from "@/lib/msa-pdf-generator";
@@ -520,14 +520,24 @@ export default function DocumentsPage() {
                       Complete
                     </Badge>
                     {request.documentUrl && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownload(request.documentUrl!, request.fileName || "document.pdf")}
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        Download
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(request.documentUrl!, "_blank")}
+                        >
+                          <Eye className="mr-2 h-4 w-4" />
+                          View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownload(request.documentUrl!, request.fileName || "document.pdf")}
+                        >
+                          <Download className="mr-2 h-4 w-4" />
+                          Download
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>

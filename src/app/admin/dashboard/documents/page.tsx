@@ -13,6 +13,7 @@ import { db, storage } from "@/lib/firebase";
 import { FileText, Upload, Loader2, CheckCircle, Clock, Download, User, Search, FileStack, CalendarCheck, FileSignature } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { generateMSAPDF } from "@/lib/msa-pdf-generator";
+import { generateFulfillmentAgreementPDF } from "@/lib/fulfillment-agreement-pdf-generator";
 import type { UserProfile } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,7 @@ export default function DocumentRequestsPage() {
   const [selectedRequest, setSelectedRequest] = useState<DocumentRequest | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [approvingRequestId, setApprovingRequestId] = useState<string | null>(null);
   const [msaDownloadingUid, setMsaDownloadingUid] = useState<string | null>(null);
 
   // Get all document requests using collectionGroup
@@ -175,17 +177,52 @@ export default function DocumentRequestsPage() {
   };
 
   const handleApproveRequest = async (request: DocumentRequest) => {
+    setApprovingRequestId(request.id);
     try {
       const requestRef = doc(db, `users/${request.userId}/documentRequests`, request.id);
-      await updateDoc(requestRef, {
-        status: "complete",
-        completedAt: Timestamp.now(),
-        decisionType: "approved",
-      });
-      toast({
-        title: "Request Approved",
-        description: "The document request has been approved.",
-      });
+      const completedAt = Timestamp.now();
+      const completedAtStr = format(completedAt.toDate(), "MMM d, yyyy");
+
+      const isFulfillmentAgreement =
+        request.documentType === "Fulfillment & Prep Services Agreement" &&
+        request.companyName &&
+        request.clientLegalName;
+
+      if (isFulfillmentAgreement) {
+        const blob = await generateFulfillmentAgreementPDF({
+          companyName: request.companyName,
+          contact: request.contact || "",
+          email: request.email || "",
+          clientLegalName: request.clientLegalName,
+          completedAt: completedAtStr,
+        });
+        const fileName = `Fulfillment-Prep-Services-Agreement-${request.companyName.replace(/\s+/g, "-")}.pdf`;
+        const storagePath = `documentRequests/${request.userId}/${request.id}/${Date.now()}_${fileName}`;
+        const storageRef = ref(storage, storagePath);
+        await uploadBytes(storageRef, blob);
+        const downloadURL = await getDownloadURL(storageRef);
+        await updateDoc(requestRef, {
+          status: "complete",
+          completedAt,
+          decisionType: "approved",
+          documentUrl: downloadURL,
+          fileName,
+        });
+        toast({
+          title: "Request Approved",
+          description: "Agreement PDF generated and the user can now view and download it.",
+        });
+      } else {
+        await updateDoc(requestRef, {
+          status: "complete",
+          completedAt,
+          decisionType: "approved",
+        });
+        toast({
+          title: "Request Approved",
+          description: "The document request has been approved.",
+        });
+      }
     } catch (error: any) {
       console.error("Error approving document request:", error);
       toast({
@@ -193,6 +230,8 @@ export default function DocumentRequestsPage() {
         title: "Error",
         description: error.message || "Failed to approve request. Please try again.",
       });
+    } finally {
+      setApprovingRequestId(null);
     }
   };
 
@@ -267,6 +306,7 @@ export default function DocumentRequestsPage() {
         documentUrl: downloadURL,
         fileName: file.name,
         completedAt: Timestamp.now(),
+        decisionType: "uploaded",
       });
 
       console.log("Document request updated in Firestore");
@@ -638,8 +678,13 @@ export default function DocumentRequestsPage() {
                         <Button
                           size="sm"
                           onClick={() => handleApproveRequest(request)}
+                          disabled={approvingRequestId === request.id}
                         >
-                          <CheckCircle className="mr-2 h-4 w-4" />
+                          {approvingRequestId === request.id ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                          )}
                           Approve
                         </Button>
                         <Button
